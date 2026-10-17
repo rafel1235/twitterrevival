@@ -1,12 +1,12 @@
 # Stato implementazione · 17 ottobre 2026
 
-**Sprint 1 implementato e verificato localmente con Next.js, API Go e PostgreSQL reali.** Avvio Docker Compose e CI remota ancora da verificare nei rispettivi ambienti. Nessuna funzione degli Sprint 2–6 implementata.
+**Sprint 1 implementato e verificato localmente, anche con Docker Compose, Next.js, API Go e PostgreSQL reali.** CI remota ancora da verificare nel relativo ambiente. Nessuna funzione degli Sprint 2–6 implementata.
 
 ## Stato iniziale e preservazione
 
 La directory di lavoro iniziale conteneva la sottocartella `twitter-revival-codex`, con `AGENTS.md`, `PROJECT_SPEC.md` e `CODEX_START_PROMPT.md`. I tre documenti sono stati letti e lasciati invariati. Non era presente codice applicativo preesistente.
 
-Git individua un repository padre nella home, ramo `master`; il progetto risulta non tracciato. Non sono stati modificati configurazioni Git, indice, branch, cronologia o file fuori dal progetto; non sono stati creati commit nel repository della home. Le letture Git hanno usato un’eccezione `safe.directory` limitata al singolo comando, senza configurazione globale.
+All’inizio Git individuava un repository padre nella home, ramo `master`; il progetto risultava non tracciato. Alla verifica successiva è presente un repository dedicato nella cartella contenitore `twitter revival`. L’agente non ha modificato configurazioni Git, indice, branch, cronologia o file fuori dal progetto e non ha creato commit. Le letture Git hanno usato un’eccezione `safe.directory` limitata al singolo comando, senza configurazione globale.
 
 ## File e attività completate
 
@@ -40,7 +40,7 @@ Windows, PowerShell; Node **24.18.0**, npm **11.16.0**, Next **16.4.2**, React *
 
 Go, PostgreSQL e sqlc non erano nel PATH; sono stati preparati tool portabili sotto `.local/`, ignorata da Git. Go e sqlc sono stati scaricati dalle release ufficiali con SHA-256 verificato. PostgreSQL reale è stato avviato su `127.0.0.1:55432` tramite `embedded-postgres@18.4.0-beta.17`, usato esclusivamente come tool temporaneo: non è una dipendenza del prodotto. API avviata sul loopback 8080. Nessun servizio a pagamento, account esterno o deploy.
 
-## Verifiche eseguite ed esiti
+## Verifiche native eseguite ed esiti
 
 | Verifica                                        | Esito reale                                                                                                                                               |
 | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -63,9 +63,23 @@ Controlli finali tutti PASS: `npm run format:check`, `npm run typecheck`, `npm r
 
 Iterazioni corrette: un primo lint ha segnalato aggiornamenti sincroni nell’effetto della sessione; risolti usando callback della richiesta asincrona. Un primo build è stato impedito da un processo concorrente, poi rieseguito con successo. Il primo Playwright ha passato 6 test UI e fermato 3 test auth su un selettore `role=alert` ambiguo con l’annunciatore di Next; il selettore è stato circoscritto al form e il run completo successivo è passato. Lo script start usa ora il vero output standalone, evitando il warning di `next start`.
 
+## Verifica Docker successiva all’installazione
+
+Docker Engine **29.8.2**, Compose **5.6.0**, WSL **2.6.3**: motore Linux avviato su Windows. Creato `.env` locale con password CSPRNG esadecimale, senza stampare credenziali e senza modificare `.env.example`; esclusione Git verificata con `git check-ignore`.
+
+Esiti reali del 17 ottobre 2026:
+
+- `docker compose config --quiet`: PASS.
+- `docker compose up --build -d --wait --wait-timeout 180`: PASS. Immagini scaricate, backend e frontend compilati nei container; nessuna modifica funzionale necessaria.
+- PostgreSQL, API e web: tutti **healthy**. Servizio migrazione **Exited (0)**, esito previsto per il processo one-shot. Volume PostgreSQL persistente creato.
+- `docker compose exec -T api /api -healthcheck`: PASS, exit 0.
+- `http://localhost:3000`: **200**; `/api/v1/auth/me` senza cookie: **401**.
+- `PLAYWRIGHT_BASE_URL=http://localhost:3000 E2E_AUTH=1 npm run test:smoke`: **9/9 PASS, nessuno skip, 15,4 secondi**. Desktop, tablet e mobile; registrazione, cookie, refresh, logout, errore credenziali e nuovo login verificati contro i container reali.
+
+Docker Desktop inizialmente richiedeva più del timeout del comando per partire, poi il motore è risultato pronto. Il primo pull non trovava `docker-credential-desktop` nel PATH del processo aperto prima dell’installazione; aggiunto il percorso dei tool Docker alla sola sessione e ripetuto con successo. Nessuna modifica globale al PATH. I servizi rimangono attivi per l’uso locale; arresto con `docker compose stop`, successivo avvio con `docker compose up -d --wait` dalla cartella con `compose.yaml`. Non sovrascrivere `.env` esistente.
+
 ## Non verificato / limiti noti
 
-- **Docker assente**: `docker compose up --build`, pull/build delle immagini e healthcheck nei container non eseguiti. Verificati i servizi nativi equivalenti e il layout standalone degli artefatti, non l’esecuzione container. YAML incluso e formattato, senza dichiarare uno smoke Compose riuscito.
 - **GitHub Actions non eseguita da remoto**, nessun push o pubblicazione. Race detector configurato in CI Linux; non eseguito nel run Windows locale.
 - Rate limit 30 mutazioni/minuto per peer TCP, condiviso dietro Next. Non si fida di forwarded IP e non è distribuito: da rivedere prima della beta. Concorrenza Argon2 limitata a 4 worker.
 - Nessuna verifica email, recupero password, profilo modificabile, follow, post reali, moderazione o GDPR operativo: rispettata la roadmap. Nessuna promessa di uso pubblico.
@@ -74,4 +88,4 @@ Iterazioni corrette: un primo lint ha segnalato aggiornamenti sincroni nell’ef
 
 ## Prossimo passo operativo
 
-Su macchina con Docker: copiare `.env.example` in `.env`, scegliere password locale, eseguire `docker compose up --build`, poi `PLAYWRIGHT_BASE_URL=http://localhost:3000 E2E_AUTH=1 npm run test:smoke`. Risolvere eventuali differenze dei container prima di dichiarare verificato quel percorso. Successivamente aprire **Sprint 2** (identità e grafo sociale) su richiesta; nessuna implementazione anticipata.
+Aprire `http://localhost:3000` e creare un account locale. Il percorso Docker è ora verificato. Successivamente aprire **Sprint 2** (identità e grafo sociale) su richiesta; nessuna implementazione anticipata. Prima di pubblicare il repository, eseguire anche la pipeline GitHub Actions nel suo ambiente; nessun push o deploy incluso.

@@ -4,7 +4,7 @@ Social indipendente, nome interno **Twitter Revival**. Brand, testi, icone SVG e
 
 ## Avvio con Docker Compose
 
-Prerequisiti: Docker Engine/Desktop con Compose v2. Dalla directory che contiene questo README:
+Prerequisiti: Docker Engine/Desktop con Compose v2 o successivo. Dalla directory che contiene questo README:
 
 ```sh
 cp .env.example .env
@@ -15,6 +15,18 @@ docker compose up --build
 Aprire **http://localhost:3000** (usare localhost, non 127.0.0.1: l’origin deve coincidere). Compose aspetta PostgreSQL sano, esegue le migrazioni, avvia API e web. Le API non sono pubblicate sull’host; il browser le raggiunge tramite Next. PostgreSQL è esposto solo sul loopback per lo sviluppo. Il volume persiste dopo `docker compose down`.
 
 PowerShell: usare `Copy-Item .env.example .env` al posto di `cp`. Se si cambia `WEB_PORT`, aggiornare anche `APP_ORIGIN`. Password con caratteri riservati agli URL richiedono percent-encoding nel DSN; per il setup locale usare una password esadecimale.
+
+**Se `.env` esiste già, conservarlo:** non ricopiarlo dall’esempio e non cambiare la password di un database già inizializzato. Il file contiene solo configurazione locale ed è escluso da Git.
+
+Su Windows aprire Docker Desktop e attendere che il motore sia pronto prima dei comandi Compose ([avvio ufficiale](https://docs.docker.com/desktop/setup/install/windows-install/#start-docker-desktop)). Dopo una nuova installazione, riavviare VS Code/il terminale se `docker` o `docker-credential-desktop` non vengono trovati nel PATH.
+
+Per gli avvii successivi, dalla directory con `compose.yaml`:
+
+```sh
+docker compose up -d --wait
+# Quando si vuole fermare il progetto, conservando i dati:
+docker compose stop
+```
 
 ```sh
 docker compose ps
@@ -153,4 +165,4 @@ docs/                            architettura, provenienza UI, stato verifiche
 compose.yaml                     db → migrate → api → web
 ```
 
-Il prossimo incremento operativo è verificare Compose su una macchina dotata di Docker, poi aprire Sprint 2 per profili e grafo sociale. Il motore post appartiene allo Sprint 3.
+Compose è stato avviato e verificato localmente con tutti i servizi sani e 9/9 test Playwright superati contro i container reali; dettagli in `docs/implementation-status.md`. Il prossimo incremento è Sprint 2 per profili e grafo sociale, su richiesta. Il motore post appartiene allo Sprint 3.
