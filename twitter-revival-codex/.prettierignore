@@ -1,0 +1,15 @@
+AGENTS.md
+PROJECT_SPEC.md
+CODEX_START_PROMPT.md
+node_modules
+.next
+package-lock.json
+go.sum
+*.go
+*.sql
+.tools
+.local
+test-results
+playwright-report
+*.png
+*.svg

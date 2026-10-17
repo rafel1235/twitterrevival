@@ -1,0 +1,9 @@
+:root {
+  --color-primary: #2d7059;
+  --color-text: #21372d;
+  --color-muted: #63746a;
+  --color-border: #e6ece7;
+  --color-background: #ffffff;
+  --color-tint: #eaf3ec;
+  --feed-width: 600px;
+}

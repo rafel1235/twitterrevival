@@ -1,0 +1,15 @@
+version: "2"
+sql:
+  - engine: postgresql
+    queries: db/queries
+    schema: migrations/001_auth.up.sql
+    gen:
+      go:
+        package: db
+        out: internal/db
+        sql_package: pgx/v5
+        overrides:
+          - db_type: uuid
+            go_type: string
+          - db_type: citext
+            go_type: string

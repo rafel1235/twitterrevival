@@ -1,0 +1,16 @@
+node_modules/
+.next/
+out/
+coverage/
+playwright-report/
+test-results/
+.env
+.env.*
+!.env.example
+*.exe
+*.test
+.tools/
+.local/
+*.tsbuildinfo
+/services/api/server
+/cookies.txt
