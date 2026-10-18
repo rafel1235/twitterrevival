@@ -103,7 +103,7 @@ func (q *Queries) ReadNotification(ctx context.Context, arg ReadNotificationPara
 
 const searchPostIDs = `-- name: SearchPostIDs :many
 SELECT p.id,p.created_at FROM posts p JOIN post_audience v ON v.post_id=p.id AND v.viewer_id=$1::uuid
-WHERE p.search_document @@ websearch_to_tsquery('simple',$2::text)
+WHERE p.community_id IS NULL AND p.search_document @@ websearch_to_tsquery('simple',$2::text)
 AND (p.created_at,p.id)<($3::timestamptz,$4::uuid)
 ORDER BY p.created_at DESC,p.id DESC LIMIT $5
 `

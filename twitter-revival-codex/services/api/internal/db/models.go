@@ -64,6 +64,36 @@ type Block struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type Community struct {
+	ID          string
+	OwnerID     pgtype.UUID
+	Name        string
+	Description string
+	Rules       string
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	ArchivedAt  pgtype.Timestamptz
+}
+
+type CommunityAudience struct {
+	ViewerID    string
+	CommunityID string
+}
+
+type CommunityEvent struct {
+	ID          string
+	CommunityID pgtype.UUID
+	ActorID     pgtype.UUID
+	Action      string
+	CreatedAt   pgtype.Timestamptz
+}
+
+type CommunityMember struct {
+	CommunityID string
+	UserID      string
+	CreatedAt   pgtype.Timestamptz
+}
+
 type Follow struct {
 	FollowerID string
 	FollowedID string
@@ -136,6 +166,7 @@ type Post struct {
 	DeletedAt          pgtype.Timestamptz
 	SearchDocument     interface{}
 	ModerationHiddenAt pgtype.Timestamptz
+	CommunityID        pgtype.UUID
 }
 
 type PostAudience struct {
@@ -144,23 +175,25 @@ type PostAudience struct {
 }
 
 type PostCard struct {
-	ViewerID     string
-	ID           string
-	AuthorID     string
-	Body         string
-	CreatedAt    pgtype.Timestamptz
-	UpdatedAt    pgtype.Timestamptz
-	ReplyToID    string
-	QuoteOfID    string
-	Handle       string
-	DisplayName  string
-	AvatarStyle  string
-	LikesCount   int64
-	RepostsCount int64
-	RepliesCount int64
-	QuotesCount  int64
-	Liked        bool
-	Reposted     bool
+	ViewerID      string
+	ID            string
+	AuthorID      string
+	Body          string
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+	ReplyToID     string
+	QuoteOfID     string
+	Handle        string
+	DisplayName   string
+	AvatarStyle   string
+	LikesCount    int64
+	RepostsCount  int64
+	RepliesCount  int64
+	QuotesCount   int64
+	Liked         bool
+	Reposted      bool
+	CommunityID   string
+	CommunityName string
 }
 
 type PostMedium struct {

@@ -218,8 +218,10 @@ func TestBetaMilestonesRetentionAndRollback(t *testing.T) {
 	if err != nil || stats.D7Eligible != 1 || stats.D7Returned != 1 || stats.D7Rate == nil || *stats.D7Rate != 1 {
 		t.Fatalf("bad D7 %+v %v", stats, err)
 	}
-	if err = migrations.Run(ctx, f.pool, "down"); err != nil {
-		t.Fatal(err)
+	for v := migrations.CurrentVersion; v >= 6; v-- {
+		if err = migrations.Run(ctx, f.pool, "down"); err != nil {
+			t.Fatal(err)
+		}
 	}
 	legacy, err := auth.NewService(&auth.PostgresRepository{Pool: f.pool}, time.Hour)
 	if err != nil {

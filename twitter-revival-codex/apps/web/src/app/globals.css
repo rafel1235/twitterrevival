@@ -968,7 +968,8 @@ a {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: 55px;
+    min-width: 0;
+    flex: 1;
     flex-direction: column;
     gap: 2px;
     color: #718078;

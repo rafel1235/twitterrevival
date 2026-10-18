@@ -63,7 +63,10 @@ const exportSQL = `SELECT jsonb_build_object(
  'format','radura-export-v1','exported_at',now(),
  'account',(SELECT jsonb_build_object('id',u.id,'handle',u.handle,'email',u.email,'created_at',u.created_at,'email_verified',u.email_verified_at IS NOT NULL,'role',u.role) FROM users u WHERE u.id=$1),
  'profile',(SELECT jsonb_build_object('display_name',display_name,'bio',bio,'location_text',location_text,'website_url',website_url,'avatar_style',avatar_style) FROM profiles WHERE user_id=$1),
- 'posts',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',id,'body',body,'reply_to_id',reply_to_id,'quote_of_id',quote_of_id,'created_at',created_at,'updated_at',updated_at,'deleted_at',deleted_at,'moderation_hidden_at',moderation_hidden_at) ORDER BY created_at,id) FROM posts WHERE author_id=$1),'[]'),
+ 'posts',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',id,'body',body,'reply_to_id',reply_to_id,'quote_of_id',quote_of_id,'community_id',community_id,'created_at',created_at,'updated_at',updated_at,'deleted_at',deleted_at,'moderation_hidden_at',moderation_hidden_at) ORDER BY created_at,id) FROM posts WHERE author_id=$1),'[]'),
+ 'communities_owned',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',id,'name',name,'description',description,'rules',rules,'created_at',created_at,'updated_at',updated_at,'archived_at',archived_at)) FROM communities WHERE owner_id=$1),'[]'),
+ 'community_memberships',COALESCE((SELECT jsonb_agg(jsonb_build_object('community_id',community_id,'created_at',created_at)) FROM community_members WHERE user_id=$1),'[]'),
+ 'community_events',COALESCE((SELECT jsonb_agg(jsonb_build_object('community_id',community_id,'action',action,'created_at',created_at)) FROM community_events WHERE actor_id=$1),'[]'),
  'following',COALESCE((SELECT jsonb_agg(jsonb_build_object('user_id',followed_id,'created_at',created_at)) FROM follows WHERE follower_id=$1),'[]'),
  'blocks',COALESCE((SELECT jsonb_agg(jsonb_build_object('user_id',blocked_id,'created_at',created_at)) FROM blocks WHERE blocker_id=$1),'[]'),
  'likes',COALESCE((SELECT jsonb_agg(jsonb_build_object('post_id',post_id,'created_at',created_at)) FROM likes WHERE user_id=$1),'[]'),
@@ -95,7 +98,7 @@ func (s *Service) Export(ctx context.Context, user auth.User, password string) (
 		return nil, err
 	}
 	var tooLarge bool
-	err = tx.QueryRow(ctx, `SELECT greatest((SELECT count(*) FROM posts WHERE author_id=$1),(SELECT count(*) FROM follows WHERE follower_id=$1),(SELECT count(*) FROM blocks WHERE blocker_id=$1),(SELECT count(*) FROM likes WHERE user_id=$1),(SELECT count(*) FROM reposts WHERE user_id=$1),(SELECT count(*) FROM notifications WHERE recipient_id=$1),(SELECT count(*) FROM reports WHERE reporter_id=$1),(SELECT count(*) FROM moderation_actions WHERE target_id=$1 OR target_id IN(SELECT id FROM posts WHERE author_id=$1)))>10000`, user.ID).Scan(&tooLarge)
+	err = tx.QueryRow(ctx, `SELECT greatest((SELECT count(*) FROM posts WHERE author_id=$1),(SELECT count(*) FROM follows WHERE follower_id=$1),(SELECT count(*) FROM blocks WHERE blocker_id=$1),(SELECT count(*) FROM likes WHERE user_id=$1),(SELECT count(*) FROM reposts WHERE user_id=$1),(SELECT count(*) FROM notifications WHERE recipient_id=$1),(SELECT count(*) FROM reports WHERE reporter_id=$1),(SELECT count(*) FROM community_members WHERE user_id=$1),(SELECT count(*) FROM community_events WHERE actor_id=$1),(SELECT count(*) FROM moderation_actions WHERE target_id=$1 OR target_id IN(SELECT id FROM posts WHERE author_id=$1)))>10000`, user.ID).Scan(&tooLarge)
 	if err != nil {
 		return nil, err
 	}
@@ -230,6 +233,9 @@ func (s *Service) Delete(ctx context.Context, user auth.User, password, confirma
 		return err
 	}
 	statements := []string{
+		"DELETE FROM community_members WHERE user_id=$1 OR community_id IN(SELECT id FROM communities WHERE owner_id=$1)",
+		"UPDATE communities SET archived_at=COALESCE(archived_at,now()),updated_at=now(),owner_id=NULL,name='Community archiviata',description='',rules='' WHERE owner_id=$1",
+		"UPDATE community_events SET actor_id=NULL WHERE actor_id=$1",
 		"UPDATE profiles SET display_name='Account eliminato',bio='',avatar_key=NULL,banner_key=NULL,location_text='',website_url=NULL,avatar_style='sage' WHERE user_id=$1",
 		"UPDATE posts SET body='[contenuto eliminato]',deleted_at=COALESCE(deleted_at,now()),updated_at=now() WHERE author_id=$1",
 		"UPDATE media SET deleted_at=COALESCE(deleted_at,now()),alt_text='Immagine rimossa' WHERE owner_id=$1",

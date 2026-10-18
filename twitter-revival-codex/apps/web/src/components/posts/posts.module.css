@@ -113,6 +113,11 @@
 .meta {
   row-gap: 3px;
 }
+.meta > a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+}
 .bodyLink {
   display: block;
 }

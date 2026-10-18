@@ -19,12 +19,14 @@ export function PostComposer({
   replyTo,
   quoteOf,
   edit,
+  community,
   onDone,
   onCancel,
 }: {
   replyTo?: PostPreview;
   quoteOf?: PostPreview;
   edit?: Post;
+  community?: { id: string; name: string };
   onDone?: (post: Post) => void;
   onCancel?: () => void;
 }) {
@@ -40,6 +42,10 @@ export function PostComposer({
   const [uploading, setUploading] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const communityID =
+    community?.id || replyTo?.community_id || edit?.community_id;
+  const communityName =
+    community?.name || replyTo?.community_name || edit?.community_name;
   async function upload() {
     if (
       !file ||
@@ -132,6 +138,7 @@ export function PostComposer({
                 body: normalizePostBody(body),
                 ...(replyTo ? { reply_to_id: replyTo.id } : {}),
                 ...(quoteOf ? { quote_of_id: quoteOf.id } : {}),
+                ...(communityID ? { community_id: communityID } : {}),
                 media_ids: images.map((image) => image.id),
               },
         },
@@ -155,7 +162,7 @@ export function PostComposer({
       setPending(false);
     }
   }
-  if (!user) return null;
+  if (!user || quoteOf?.community_id) return null;
   return (
     <form
       className={`composer ${styles.composer}`}
@@ -164,6 +171,13 @@ export function PostComposer({
     >
       <UserAvatar name={user.display_name} style={user.avatar_style} />
       <div className="composer-body">
+        {communityID && (
+          <p className={styles.context}>
+            Solo i membri
+            {communityName ? ` di ${communityName}` : " della community"}{" "}
+            possono leggere e pubblicare.
+          </p>
+        )}
         {(replyTo || quoteOf) && (
           <p className={styles.context}>
             {replyTo ? "In risposta a" : "Citando"} @

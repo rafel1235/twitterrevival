@@ -18,6 +18,7 @@ import (
 
 var ErrNotFound = errors.New("post not found")
 var ErrForbidden = errors.New("post belongs to another user")
+var ErrCommunityShare = errors.New("community posts cannot be quoted or reposted")
 var idPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 type Author struct {
@@ -27,12 +28,14 @@ type Author struct {
 	AvatarStyle string `json:"avatar_style"`
 }
 type Preview struct {
-	ID        string             `json:"id"`
-	Author    Author             `json:"author"`
-	Body      string             `json:"body"`
-	CreatedAt time.Time          `json:"created_at"`
-	UpdatedAt time.Time          `json:"updated_at"`
-	Media     []media.Attachment `json:"media"`
+	ID            string             `json:"id"`
+	Author        Author             `json:"author"`
+	Body          string             `json:"body"`
+	CreatedAt     time.Time          `json:"created_at"`
+	UpdatedAt     time.Time          `json:"updated_at"`
+	Media         []media.Attachment `json:"media"`
+	CommunityID   string             `json:"community_id,omitempty"`
+	CommunityName string             `json:"community_name,omitempty"`
 }
 type Post struct {
 	Preview
@@ -59,10 +62,11 @@ type Page struct {
 	NextCursor string  `json:"next_cursor,omitempty"`
 }
 type CreateInput struct {
-	Body      string   `json:"body"`
-	ReplyToID string   `json:"reply_to_id"`
-	QuoteOfID string   `json:"quote_of_id"`
-	MediaIDs  []string `json:"media_ids"`
+	Body        string   `json:"body"`
+	ReplyToID   string   `json:"reply_to_id"`
+	QuoteOfID   string   `json:"quote_of_id"`
+	MediaIDs    []string `json:"media_ids"`
+	CommunityID string   `json:"community_id"`
 }
 type EditInput struct {
 	Body string `json:"body"`
@@ -107,7 +111,7 @@ func (s *Service) Create(ctx context.Context, actor string, in CreateInput) (Pos
 	if in.ReplyToID != "" && in.QuoteOfID != "" {
 		return Post{}, &auth.ValidationError{Fields: map[string]string{"post": "Scegli una risposta oppure una citazione."}}
 	}
-	for _, id := range []string{in.ReplyToID, in.QuoteOfID} {
+	for _, id := range []string{in.ReplyToID, in.QuoteOfID, in.CommunityID} {
 		if id != "" {
 			if err := validateID(id); err != nil {
 				return Post{}, err
@@ -116,6 +120,7 @@ func (s *Service) Create(ctx context.Context, actor string, in CreateInput) (Pos
 	}
 	in.ReplyToID = strings.ToLower(in.ReplyToID)
 	in.QuoteOfID = strings.ToLower(in.QuoteOfID)
+	in.CommunityID = strings.ToLower(in.CommunityID)
 	return s.repo.Create(ctx, actor, in)
 }
 func (s *Service) Search(ctx context.Context, viewer, term string, p users.Pagination) (Page, error) {

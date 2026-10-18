@@ -81,6 +81,8 @@ function AccountPanel() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const communityPage =
+    pathname === "/communities" || pathname.startsWith("/communities/");
   const { user, expired } = useSession();
   const ownProfile =
     !!user &&
@@ -153,6 +155,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           >
             <Icon name="search" />
             <span>Persone</span>
+          </Link>
+          <Link
+            href="/communities"
+            className={`nav-item ${communityPage ? "active" : ""}`}
+            aria-label="Community"
+            aria-current={communityPage ? "page" : undefined}
+          >
+            <Icon name="community" />
+            <span>Community</span>
           </Link>
           <Link
             className={`nav-item ${ownProfile ? "active" : ""}`}
@@ -285,6 +296,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           aria-current={pathname.startsWith("/settings/") ? "page" : undefined}
         >
           <Icon name="settings" />
+        </Link>
+        <Link
+          href="/communities"
+          aria-label="Community"
+          aria-current={communityPage ? "page" : undefined}
+        >
+          <Icon name="community" />
         </Link>
         <Link
           href={user ? `/u/${user.handle}` : "/login"}

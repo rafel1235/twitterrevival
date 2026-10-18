@@ -36,7 +36,11 @@ function DetailContent({ id }: { id: string }) {
       <header className="feed-header">
         <div>
           <h1>Conversazione</h1>
-          <p>Un pensiero, tante prospettive</p>
+          <p>
+            {post?.community_id
+              ? "Conversazione riservata ai membri della community"
+              : "Un pensiero, tante prospettive"}
+          </p>
         </div>
         <Link href="/" className="text-button">
           Home

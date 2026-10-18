@@ -62,14 +62,16 @@ const recentDuplicatePost = `-- name: RecentDuplicatePost :one
 SELECT EXISTS(SELECT 1 FROM posts WHERE author_id=$1::uuid
  AND created_at>now()-interval '10 minutes' AND lower(body)=lower($2::text)
  AND COALESCE(reply_to_id::text,'')=$3::text
- AND COALESCE(quote_of_id::text,'')=$4::text)::boolean
+ AND COALESCE(quote_of_id::text,'')=$4::text
+ AND COALESCE(community_id::text,'')=$5::text)::boolean
 `
 
 type RecentDuplicatePostParams struct {
-	AuthorID string
-	Body     string
-	ReplyID  string
-	QuoteID  string
+	AuthorID    string
+	Body        string
+	ReplyID     string
+	QuoteID     string
+	CommunityID string
 }
 
 func (q *Queries) RecentDuplicatePost(ctx context.Context, arg RecentDuplicatePostParams) (bool, error) {
@@ -78,6 +80,7 @@ func (q *Queries) RecentDuplicatePost(ctx context.Context, arg RecentDuplicatePo
 		arg.Body,
 		arg.ReplyID,
 		arg.QuoteID,
+		arg.CommunityID,
 	)
 	var column_1 bool
 	err := row.Scan(&column_1)

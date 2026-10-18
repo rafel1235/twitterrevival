@@ -141,18 +141,43 @@ test("@auth immagini S3, ricerca e notifiche persistenti con blocchi", async ({
       path: testInfo.outputPath(`search-media-${testInfo.project.name}.png`),
       fullPage: true,
     });
-    await page
+    const peopleTab = page
       .getByRole("navigation", { name: "Tipo di ricerca" })
-      .getByRole("link", { name: "Persone", exact: true })
-      .click();
-    await page
-      .getByRole("search", { name: "Ricerca", exact: true })
-      .getByLabel("Cerca in Radura", { exact: true })
-      .fill(b.handle);
-    await page
-      .getByRole("search", { name: "Ricerca", exact: true })
+      .getByRole("link", { name: "Persone", exact: true });
+    await peopleTab.click();
+    await expect(page).toHaveURL(
+      (url) =>
+        url.pathname === "/search" &&
+        url.searchParams.get("q") === term &&
+        url.searchParams.get("type") === "users",
+    );
+    // App Router remounts SearchBox when the search kind changes. Wait for
+    // that committed tab before editing its input, rather than the old form.
+    await expect(peopleTab).toHaveAttribute("aria-current", "page");
+    await expect(
+      page.getByRole("region", { name: "Risultati persone" }),
+    ).toBeVisible();
+    const peopleSearch = page.getByRole("search", {
+      name: "Ricerca",
+      exact: true,
+    });
+    const peopleQuery = peopleSearch.getByLabel("Cerca in Radura", {
+      exact: true,
+    });
+    await expect(peopleSearch.locator('input[name="type"]')).toHaveValue(
+      "users",
+    );
+    await expect(peopleQuery).toHaveValue(term);
+    await peopleQuery.fill(b.handle);
+    await peopleSearch
       .getByRole("button", { name: "Cerca", exact: true })
       .click();
+    await expect(page).toHaveURL(
+      (url) =>
+        url.pathname === "/search" &&
+        url.searchParams.get("q") === b.handle &&
+        url.searchParams.get("type") === "users",
+    );
     await expect(
       page
         .getByRole("region", { name: "Risultati persone" })

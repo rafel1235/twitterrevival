@@ -19,6 +19,7 @@ import (
 	"radura.local/api/internal/auth"
 	"radura.local/api/internal/backup"
 	"radura.local/api/internal/beta"
+	"radura.local/api/internal/communities"
 	"radura.local/api/internal/httpapi"
 	"radura.local/api/internal/mailer"
 	"radura.local/api/internal/media"
@@ -191,12 +192,13 @@ func run() error {
 	accounts := auth.NewAccountService(&auth.PostgresRepository{Pool: pool}, service, sender, origin)
 	profiles := users.NewService(&users.Repository{Pool: pool})
 	postService := posts.NewService(&posts.Repository{Pool: pool})
+	communityService := communities.NewService(pool)
 	metricsToken := os.Getenv("METRICS_TOKEN")
 	if metricsToken != "" && len(metricsToken) < 32 {
 		return errors.New("METRICS_TOKEN must have at least 32 characters")
 	}
 	metrics := monitoring.New(pool, metricsToken)
-	handler, err := httpapi.New(service, httpapi.Config{Origin: origin, CookieSecure: secure, SessionTTL: duration}, healthy, httpapi.WithUsers(profiles), httpapi.WithAccounts(accounts), httpapi.WithPosts(postService), httpapi.WithMedia(media.NewService(&media.Repository{Pool: pool, Store: storage})), httpapi.WithNotifications(notifications.NewService(pool)), httpapi.WithSafety(moderators, privacyService, &safety.Guard{Pool: pool}), httpapi.WithBeta(betaService, metrics))
+	handler, err := httpapi.New(service, httpapi.Config{Origin: origin, CookieSecure: secure, SessionTTL: duration}, healthy, httpapi.WithUsers(profiles), httpapi.WithAccounts(accounts), httpapi.WithPosts(postService), httpapi.WithCommunities(communityService), httpapi.WithMedia(media.NewService(&media.Repository{Pool: pool, Store: storage})), httpapi.WithNotifications(notifications.NewService(pool)), httpapi.WithSafety(moderators, privacyService, &safety.Guard{Pool: pool}), httpapi.WithBeta(betaService, metrics))
 	if err != nil {
 		return err
 	}

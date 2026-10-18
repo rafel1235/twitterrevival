@@ -11,6 +11,28 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const communityPostAccess = `-- name: CommunityPostAccess :one
+SELECT EXISTS(SELECT 1 FROM community_audience WHERE community_id=$1::uuid AND viewer_id=$2::uuid) AS visible,
+EXISTS(SELECT 1 FROM community_members WHERE community_id=$1::uuid AND user_id=$2::uuid) AS member
+`
+
+type CommunityPostAccessParams struct {
+	CommunityID string
+	ViewerID    string
+}
+
+type CommunityPostAccessRow struct {
+	Visible bool
+	Member  bool
+}
+
+func (q *Queries) CommunityPostAccess(ctx context.Context, arg CommunityPostAccessParams) (CommunityPostAccessRow, error) {
+	row := q.db.QueryRow(ctx, communityPostAccess, arg.CommunityID, arg.ViewerID)
+	var i CommunityPostAccessRow
+	err := row.Scan(&i.Visible, &i.Member)
+	return i, err
+}
+
 const deleteOwnPost = `-- name: DeleteOwnPost :exec
 UPDATE posts SET deleted_at=clock_timestamp(),updated_at=clock_timestamp()
 WHERE id=$1::uuid AND author_id=$2::uuid AND deleted_at IS NULL
@@ -42,19 +64,37 @@ func (q *Queries) EditOwnPost(ctx context.Context, arg EditOwnPostParams) error 
 	return err
 }
 
-const findPostAuthor = `-- name: FindPostAuthor :one
-SELECT author_id FROM posts WHERE id=$1
+const findCommunityOwner = `-- name: FindCommunityOwner :one
+SELECT COALESCE(owner_id::text,'')::text AS owner_id FROM communities WHERE id=$1
 `
 
-func (q *Queries) FindPostAuthor(ctx context.Context, id string) (string, error) {
-	row := q.db.QueryRow(ctx, findPostAuthor, id)
-	var author_id string
-	err := row.Scan(&author_id)
-	return author_id, err
+func (q *Queries) FindCommunityOwner(ctx context.Context, id string) (string, error) {
+	row := q.db.QueryRow(ctx, findCommunityOwner, id)
+	var owner_id string
+	err := row.Scan(&owner_id)
+	return owner_id, err
+}
+
+const findPostContext = `-- name: FindPostContext :one
+SELECT p.author_id,COALESCE(p.community_id::text,'')::text AS community_id,COALESCE(c.owner_id::text,'')::text AS community_owner_id
+FROM posts p LEFT JOIN communities c ON c.id=p.community_id WHERE p.id=$1
+`
+
+type FindPostContextRow struct {
+	AuthorID         string
+	CommunityID      string
+	CommunityOwnerID string
+}
+
+func (q *Queries) FindPostContext(ctx context.Context, id string) (FindPostContextRow, error) {
+	row := q.db.QueryRow(ctx, findPostContext, id)
+	var i FindPostContextRow
+	err := row.Scan(&i.AuthorID, &i.CommunityID, &i.CommunityOwnerID)
+	return i, err
 }
 
 const getPostCards = `-- name: GetPostCards :many
-SELECT viewer_id, id, author_id, body, created_at, updated_at, reply_to_id, quote_of_id, handle, display_name, avatar_style, likes_count, reposts_count, replies_count, quotes_count, liked, reposted FROM post_cards WHERE viewer_id=$1::uuid AND id=ANY($2::uuid[])
+SELECT viewer_id, id, author_id, body, created_at, updated_at, reply_to_id, quote_of_id, handle, display_name, avatar_style, likes_count, reposts_count, replies_count, quotes_count, liked, reposted, community_id, community_name FROM post_cards WHERE viewer_id=$1::uuid AND id=ANY($2::uuid[])
 `
 
 type GetPostCardsParams struct {
@@ -89,6 +129,8 @@ func (q *Queries) GetPostCards(ctx context.Context, arg GetPostCardsParams) ([]P
 			&i.QuotesCount,
 			&i.Liked,
 			&i.Reposted,
+			&i.CommunityID,
+			&i.CommunityName,
 		); err != nil {
 			return nil, err
 		}
@@ -101,16 +143,18 @@ func (q *Queries) GetPostCards(ctx context.Context, arg GetPostCardsParams) ([]P
 }
 
 const insertPost = `-- name: InsertPost :one
-INSERT INTO posts(author_id,body,reply_to_id,quote_of_id)
-VALUES($1::uuid,$2::text,NULLIF($3::text,'')::uuid,NULLIF($4::text,'')::uuid)
+INSERT INTO posts(author_id,body,reply_to_id,quote_of_id,community_id,visibility)
+VALUES($1::uuid,$2::text,NULLIF($3::text,'')::uuid,NULLIF($4::text,'')::uuid,
+NULLIF($5::text,'')::uuid,CASE WHEN $5::text='' THEN 'public' ELSE 'community' END)
 RETURNING id
 `
 
 type InsertPostParams struct {
-	AuthorID string
-	Body     string
-	ReplyID  string
-	QuoteID  string
+	AuthorID    string
+	Body        string
+	ReplyID     string
+	QuoteID     string
+	CommunityID string
 }
 
 func (q *Queries) InsertPost(ctx context.Context, arg InsertPostParams) (string, error) {
@@ -119,6 +163,7 @@ func (q *Queries) InsertPost(ctx context.Context, arg InsertPostParams) (string,
 		arg.Body,
 		arg.ReplyID,
 		arg.QuoteID,
+		arg.CommunityID,
 	)
 	var id string
 	err := row.Scan(&id)
@@ -139,6 +184,52 @@ func (q *Queries) LikePost(ctx context.Context, arg LikePostParams) error {
 	return err
 }
 
+const listCommunityPostIDs = `-- name: ListCommunityPostIDs :many
+SELECT p.id,p.created_at FROM posts p JOIN post_audience v ON v.post_id=p.id AND v.viewer_id=$1::uuid
+WHERE p.community_id=$2::uuid AND p.reply_to_id IS NULL
+AND (p.created_at,p.id)<($3::timestamptz,$4::uuid)
+ORDER BY p.created_at DESC,p.id DESC LIMIT $5
+`
+
+type ListCommunityPostIDsParams struct {
+	ViewerID    string
+	CommunityID string
+	CursorTime  pgtype.Timestamptz
+	CursorID    string
+	PageLimit   int32
+}
+
+type ListCommunityPostIDsRow struct {
+	ID        string
+	CreatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) ListCommunityPostIDs(ctx context.Context, arg ListCommunityPostIDsParams) ([]ListCommunityPostIDsRow, error) {
+	rows, err := q.db.Query(ctx, listCommunityPostIDs,
+		arg.ViewerID,
+		arg.CommunityID,
+		arg.CursorTime,
+		arg.CursorID,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCommunityPostIDsRow
+	for rows.Next() {
+		var i ListCommunityPostIDsRow
+		if err := rows.Scan(&i.ID, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPostEvents = `-- name: ListPostEvents :many
 WITH events AS (
   SELECT p.id AS event_id,p.id AS post_id,p.author_id AS actor_id,p.created_at,false AS is_repost
@@ -149,7 +240,7 @@ WITH events AS (
 SELECT e.event_id,e.post_id,e.created_at,e.is_repost,u.id AS actor_id,u.handle,pr.display_name,pr.avatar_style
 FROM events e JOIN post_audience v ON v.post_id=e.post_id AND v.viewer_id=$1::uuid
 JOIN posts p ON p.id=e.post_id JOIN users u ON u.id=e.actor_id JOIN profiles pr ON pr.user_id=u.id
-WHERE u.status='active'
+WHERE u.status='active' AND p.community_id IS NULL
 AND (($2::text='' AND
      (e.actor_id=$1::uuid OR EXISTS(SELECT 1 FROM follows f WHERE f.follower_id=$1::uuid AND f.followed_id=e.actor_id)))
   OR ($2::text<>'' AND e.actor_id=NULLIF($2::text,'')::uuid))
@@ -262,20 +353,37 @@ func (q *Queries) ListReplyIDs(ctx context.Context, arg ListReplyIDsParams) ([]L
 }
 
 const lockPost = `-- name: LockPost :one
-SELECT id,author_id,deleted_at FROM posts WHERE id=$1 FOR UPDATE
+SELECT id,author_id,deleted_at,COALESCE(community_id::text,'')::text AS community_id FROM posts WHERE id=$1 FOR UPDATE
 `
 
 type LockPostRow struct {
-	ID        string
-	AuthorID  string
-	DeletedAt pgtype.Timestamptz
+	ID          string
+	AuthorID    string
+	DeletedAt   pgtype.Timestamptz
+	CommunityID string
 }
 
 func (q *Queries) LockPost(ctx context.Context, id string) (LockPostRow, error) {
 	row := q.db.QueryRow(ctx, lockPost, id)
 	var i LockPostRow
-	err := row.Scan(&i.ID, &i.AuthorID, &i.DeletedAt)
+	err := row.Scan(
+		&i.ID,
+		&i.AuthorID,
+		&i.DeletedAt,
+		&i.CommunityID,
+	)
 	return i, err
+}
+
+const lockPostCommunity = `-- name: LockPostCommunity :one
+SELECT id FROM communities WHERE id=$1 FOR UPDATE
+`
+
+func (q *Queries) LockPostCommunity(ctx context.Context, id string) (string, error) {
+	row := q.db.QueryRow(ctx, lockPostCommunity, id)
+	var id_2 string
+	err := row.Scan(&id_2)
+	return id_2, err
 }
 
 const repostPost = `-- name: RepostPost :exec

@@ -11,6 +11,8 @@ export type PostPreview = {
   created_at: string;
   updated_at: string;
   media: Attachment[];
+  community_id?: string;
+  community_name?: string;
 };
 export type Attachment = {
   id: string;

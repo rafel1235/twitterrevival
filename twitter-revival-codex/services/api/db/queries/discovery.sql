@@ -1,6 +1,6 @@
 -- name: SearchPostIDs :many
 SELECT p.id,p.created_at FROM posts p JOIN post_audience v ON v.post_id=p.id AND v.viewer_id=sqlc.arg(viewer_id)::uuid
-WHERE p.search_document @@ websearch_to_tsquery('simple',sqlc.arg(term)::text)
+WHERE p.community_id IS NULL AND p.search_document @@ websearch_to_tsquery('simple',sqlc.arg(term)::text)
 AND (p.created_at,p.id)<(sqlc.arg(cursor_time)::timestamptz,sqlc.arg(cursor_id)::uuid)
 ORDER BY p.created_at DESC,p.id DESC LIMIT sqlc.arg(page_limit);
 

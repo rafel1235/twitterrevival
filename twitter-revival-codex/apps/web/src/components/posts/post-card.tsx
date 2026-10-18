@@ -96,6 +96,17 @@ export function PostCard({
         />
       </Link>
       <div className="post-content">
+        {post.community_id && (
+          <p className={styles.context}>
+            <Link
+              className="text-button"
+              href={`/communities/${post.community_id}`}
+            >
+              Community · {post.community_name || "Apri community"}
+            </Link>
+            <span className="muted"> · Solo per i membri</span>
+          </p>
+        )}
         <div className={`post-meta ${styles.meta}`}>
           <Link href={`/u/${post.author.handle}`}>
             <strong>{post.author.display_name}</strong>
@@ -139,15 +150,17 @@ export function PostCard({
             <Icon name="reply" size={18} />
             <span>{post.replies_count}</span>
           </Link>
-          <button
-            disabled={pending}
-            aria-label={`${post.reposted ? "Annulla repost" : "Ripubblica"}, ${post.reposts_count} repost`}
-            aria-pressed={post.reposted}
-            onClick={() => void mutate("reposts")}
-          >
-            <Icon name="repeat" size={18} />
-            <span>{post.reposts_count}</span>
-          </button>
+          {!post.community_id && (
+            <button
+              disabled={pending}
+              aria-label={`${post.reposted ? "Annulla repost" : "Ripubblica"}, ${post.reposts_count} repost`}
+              aria-pressed={post.reposted}
+              onClick={() => void mutate("reposts")}
+            >
+              <Icon name="repeat" size={18} />
+              <span>{post.reposts_count}</span>
+            </button>
+          )}
           <button
             disabled={pending}
             aria-label={`${post.liked ? "Rimuovi mi piace" : "Mi piace"}, ${post.likes_count} mi piace`}
@@ -157,14 +170,16 @@ export function PostCard({
             <Icon name="heart" size={18} />
             <span>{post.likes_count}</span>
           </button>
-          <button
-            disabled={pending}
-            aria-label={`Cita, ${post.quotes_count} citazioni`}
-            onClick={() => setMode(mode === "quote" ? null : "quote")}
-          >
-            <Icon name="share" size={18} />
-            <span>{post.quotes_count}</span>
-          </button>
+          {!post.community_id && (
+            <button
+              disabled={pending}
+              aria-label={`Cita, ${post.quotes_count} citazioni`}
+              onClick={() => setMode(mode === "quote" ? null : "quote")}
+            >
+              <Icon name="share" size={18} />
+              <span>{post.quotes_count}</span>
+            </button>
+          )}
         </div>
         {post.is_own && (
           <div className={styles.ownActions}>
@@ -218,7 +233,7 @@ export function PostCard({
             onCancel={() => setMode(null)}
           />
         )}
-        {mode === "quote" && (
+        {mode === "quote" && !post.community_id && (
           <PostComposer
             key={`quote-${post.id}`}
             quoteOf={post}

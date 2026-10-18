@@ -9,6 +9,7 @@ sql:
       - migrations/004_discovery_media.up.sql
       - migrations/005_safety_privacy.up.sql
       - migrations/006_private_beta.up.sql
+      - migrations/007_communities.up.sql
     gen:
       go:
         package: db

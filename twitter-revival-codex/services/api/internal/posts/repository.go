@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"radura.local/api/internal/auth"
+	"radura.local/api/internal/communities"
 	"radura.local/api/internal/db"
 	"radura.local/api/internal/media"
 	"radura.local/api/internal/safety"
@@ -24,7 +25,7 @@ func mapError(err error) error {
 	return err
 }
 func preview(row db.PostCard) Preview {
-	return Preview{ID: row.ID, Author: Author{row.AuthorID, row.Handle, row.DisplayName, row.AvatarStyle}, Body: row.Body, CreatedAt: row.CreatedAt.Time.UTC(), UpdatedAt: row.UpdatedAt.Time.UTC()}
+	return Preview{ID: row.ID, Author: Author{row.AuthorID, row.Handle, row.DisplayName, row.AvatarStyle}, Body: row.Body, CreatedAt: row.CreatedAt.Time.UTC(), UpdatedAt: row.UpdatedAt.Time.UTC(), CommunityID: row.CommunityID, CommunityName: row.CommunityName}
 }
 
 // Hydrate at most one level, in two bulk queries. Every reference uses the same
@@ -118,24 +119,47 @@ func (r *Repository) Get(ctx context.Context, viewer, id string) (Post, error) {
 	return post, tx.Commit(ctx)
 }
 
-// Order is always pair advisory lock, then post row. It matches block/follow
-// serialization and prevents an interaction from passing a committed block.
+// Lock all user rows in UUID order, then the community, pair and post. A leave
+// or archive cannot commit between the audience check and an interaction.
 func lockTarget(ctx context.Context, q *db.Queries, actor, id string) (db.LockPostRow, error) {
-	author, err := q.FindPostAuthor(ctx, id)
+	target, err := q.FindPostContext(ctx, id)
 	if err != nil {
 		return db.LockPostRow{}, mapError(err)
 	}
-	if err = safety.LockActive(ctx, q, actor, author); err != nil {
+	accounts := []string{actor, target.AuthorID}
+	if target.CommunityOwnerID != "" {
+		accounts = append(accounts, target.CommunityOwnerID)
+	}
+	if err = safety.LockActive(ctx, q, accounts...); err != nil {
 		if errors.Is(err, auth.ErrUnauthorized) {
 			return db.LockPostRow{}, ErrNotFound
 		}
 		return db.LockPostRow{}, err
 	}
-	if err = q.LockUserPair(ctx, db.LockUserPairParams{ActorID: actor, TargetID: author}); err != nil {
+	if target.CommunityID != "" {
+		if _, err = q.LockPostCommunity(ctx, target.CommunityID); err != nil {
+			return db.LockPostRow{}, mapError(err)
+		}
+	}
+	if err = q.LockUserPair(ctx, db.LockUserPairParams{ActorID: actor, TargetID: target.AuthorID}); err != nil {
 		return db.LockPostRow{}, err
 	}
 	row, err := q.LockPost(ctx, id)
 	return row, mapError(err)
+}
+
+func communityAccess(ctx context.Context, q *db.Queries, actor, id string) error {
+	access, err := q.CommunityPostAccess(ctx, db.CommunityPostAccessParams{CommunityID: id, ViewerID: actor})
+	if err != nil {
+		return err
+	}
+	if !access.Visible {
+		return communities.ErrNotFound
+	}
+	if !access.Member {
+		return communities.ErrForbidden
+	}
+	return nil
 }
 func (r *Repository) Create(ctx context.Context, actor string, in CreateInput) (Post, error) {
 	tx, err := r.Pool.Begin(ctx)
@@ -149,10 +173,37 @@ func (r *Repository) Create(ctx context.Context, actor string, in CreateInput) (
 		target = in.QuoteOfID
 	}
 	if target != "" {
-		if _, err = lockTarget(ctx, q, actor, target); err != nil {
-			return Post{}, err
+		row, e := lockTarget(ctx, q, actor, target)
+		if e != nil {
+			return Post{}, e
 		}
 		if _, err = single(ctx, q, actor, target); err != nil {
+			return Post{}, err
+		}
+		if in.QuoteOfID != "" && (row.CommunityID != "" || in.CommunityID != "") {
+			return Post{}, ErrCommunityShare
+		}
+		if in.ReplyToID != "" {
+			if in.CommunityID != "" && in.CommunityID != row.CommunityID {
+				return Post{}, &auth.ValidationError{Fields: map[string]string{"community_id": "La risposta deve restare nella community del post originale."}}
+			}
+			in.CommunityID = row.CommunityID
+		}
+	} else if in.CommunityID != "" {
+		owner, e := q.FindCommunityOwner(ctx, in.CommunityID)
+		if e != nil {
+			return Post{}, mapCommunityError(e)
+		}
+		if owner == "" {
+			return Post{}, communities.ErrNotFound
+		}
+		if err = safety.LockActive(ctx, q, actor, owner); err != nil {
+			return Post{}, err
+		}
+		if _, err = q.LockPostCommunity(ctx, in.CommunityID); err != nil {
+			return Post{}, mapCommunityError(err)
+		}
+		if err = communityAccess(ctx, q, actor, in.CommunityID); err != nil {
 			return Post{}, err
 		}
 	} else if err = safety.LockActive(ctx, q, actor); err != nil {
@@ -182,14 +233,14 @@ func (r *Repository) Create(ctx context.Context, actor string, in CreateInput) (
 			}
 		}
 	}
-	duplicate, err := q.RecentDuplicatePost(ctx, db.RecentDuplicatePostParams{AuthorID: actor, Body: in.Body, ReplyID: in.ReplyToID, QuoteID: in.QuoteOfID})
+	duplicate, err := q.RecentDuplicatePost(ctx, db.RecentDuplicatePostParams{AuthorID: actor, Body: in.Body, ReplyID: in.ReplyToID, QuoteID: in.QuoteOfID, CommunityID: in.CommunityID})
 	if err != nil {
 		return Post{}, err
 	}
 	if duplicate {
 		return Post{}, safety.ErrSpam
 	}
-	id, err := q.InsertPost(ctx, db.InsertPostParams{AuthorID: actor, Body: in.Body, ReplyID: in.ReplyToID, QuoteID: in.QuoteOfID})
+	id, err := q.InsertPost(ctx, db.InsertPostParams{AuthorID: actor, Body: in.Body, ReplyID: in.ReplyToID, QuoteID: in.QuoteOfID, CommunityID: in.CommunityID})
 	if err != nil {
 		return Post{}, err
 	}
@@ -254,8 +305,12 @@ func (r *Repository) Mutate(ctx context.Context, actor, id, action, body string)
 		}
 		return Post{}, tx.Commit(ctx)
 	}
-	if _, err = single(ctx, q, actor, id); err != nil {
+	post, err := single(ctx, q, actor, id)
+	if err != nil {
 		return Post{}, err
+	}
+	if (action == "repost" || action == "unrepost") && post.CommunityID != "" {
+		return Post{}, ErrCommunityShare
 	}
 	if (action == "edit" || action == "delete") && row.AuthorID != actor {
 		return Post{}, ErrForbidden
@@ -282,7 +337,7 @@ func (r *Repository) Mutate(ctx context.Context, actor, id, action, body string)
 	if action == "delete" {
 		return Post{}, tx.Commit(ctx)
 	}
-	post, err := single(ctx, q, actor, id)
+	post, err = single(ctx, q, actor, id)
 	if err != nil {
 		return Post{}, err
 	}
@@ -298,7 +353,19 @@ func (r *Repository) List(ctx context.Context, viewer, kind, target string, p us
 	at := pgtype.Timestamptz{Time: p.Before, Valid: true}
 	page := Page{Items: make([]Event, 0)}
 	ids := make([]string, 0, p.Limit+1)
-	if kind == "replies" {
+	if kind == "community" {
+		if err = communityAccess(ctx, q, viewer, target); err != nil {
+			return Page{}, err
+		}
+		rows, e := q.ListCommunityPostIDs(ctx, db.ListCommunityPostIDsParams{ViewerID: viewer, CommunityID: target, CursorTime: at, CursorID: p.ID, PageLimit: p.Limit + 1})
+		if e != nil {
+			return Page{}, e
+		}
+		for _, row := range rows {
+			ids = append(ids, row.ID)
+			page.Items = append(page.Items, Event{ID: row.ID, CreatedAt: row.CreatedAt.Time.UTC()})
+		}
+	} else if kind == "replies" {
 		if _, err = single(ctx, q, viewer, target); err != nil {
 			return Page{}, err
 		}
@@ -344,4 +411,11 @@ func (r *Repository) List(ctx context.Context, viewer, kind, target string, p us
 		page.Items[i].Post = cards[id]
 	}
 	return page, tx.Commit(ctx)
+}
+
+func mapCommunityError(err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return communities.ErrNotFound
+	}
+	return err
 }

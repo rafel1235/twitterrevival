@@ -19,10 +19,31 @@ export default function PrivacyPage() {
         <h2>Dati trattati</h2>
         <p>
           Account, email, credenziali protette, profilo, post, immagini,
-          connessioni, notifiche e segnalazioni vengono conservati nel database
-          e nello storage locali. Non sono previsti messaggi privati, pubblicità
-          o strumenti analitici di terzi. Le immagini caricate vengono
-          ricodificate; lo storage conserva la versione elaborata.
+          connessioni, community, iscrizioni, notifiche e segnalazioni vengono
+          conservati nel database e nello storage locali. Non sono previsti
+          messaggi privati, pubblicità o strumenti analitici di terzi. Le
+          immagini caricate vengono ricodificate; lo storage conserva la
+          versione elaborata.
+        </p>
+        <h2>Community</h2>
+        <p>
+          Nome, descrizione, regole e lista dei membri sono visibili agli
+          account della beta. L’iscrizione è libera: i post e le immagini sono
+          riservati ai membri attuali e restano fuori da home, profili e ricerca
+          generale. I moderatori del sito possono esaminare i post segnalati.
+          Abbandonare una community revoca l’accesso, ma non elimina i post già
+          pubblicati; puoi iscriverti nuovamente per gestirli. I contenuti già
+          visualizzati o copiati da altre persone non possono essere ritirati.
+        </p>
+        <p>
+          L’esportazione include le tue iscrizioni, le community che possiedi e
+          i tuoi post. Eliminando l’account vengono rimosse le iscrizioni e
+          archiviate le community che possiedi, cancellandone nome, descrizione
+          e regole. I post degli altri autori restano inaccessibili nella
+          community archiviata e disponibili nella loro esportazione personale.
+          Gli eventi tecnici delle community conservano solo identificatori,
+          azione e data per 180 giorni; il tuo identificatore viene scollegato
+          alla cancellazione dell’account.
         </p>
         <h2>Esportazione e cancellazione</h2>
         <p>

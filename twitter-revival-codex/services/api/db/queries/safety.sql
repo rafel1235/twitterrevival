@@ -11,4 +11,5 @@ RETURNING requests;
 SELECT EXISTS(SELECT 1 FROM posts WHERE author_id=sqlc.arg(author_id)::uuid
  AND created_at>now()-interval '10 minutes' AND lower(body)=lower(sqlc.arg(body)::text)
  AND COALESCE(reply_to_id::text,'')=sqlc.arg(reply_id)::text
- AND COALESCE(quote_of_id::text,'')=sqlc.arg(quote_id)::text)::boolean;
+ AND COALESCE(quote_of_id::text,'')=sqlc.arg(quote_id)::text
+ AND COALESCE(community_id::text,'')=sqlc.arg(community_id)::text)::boolean;

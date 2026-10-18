@@ -117,6 +117,12 @@ export function AccountSettings() {
             rimosse dallo storage con tentativi automatici in caso di errore.
           </p>
           <p>
+            Rimuove anche le tue iscrizioni e archivia le community che
+            possiedi, cancellandone nome, descrizione e regole. Gli altri membri
+            perderanno l’accesso alle conversazioni; i loro post non diventano
+            pubblici.
+          </p>
+          <p>
             Un audit limitato e pseudonimo può restare per 180 giorni; i backup
             locali richiedono una gestione separata.{" "}
             <Link href="/privacy">Leggi le informazioni sui dati</Link>.

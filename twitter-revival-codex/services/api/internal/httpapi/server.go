@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"radura.local/api/internal/auth"
 	"radura.local/api/internal/beta"
+	"radura.local/api/internal/communities"
 	"radura.local/api/internal/media"
 	"radura.local/api/internal/moderation"
 	"radura.local/api/internal/monitoring"
@@ -38,6 +39,7 @@ type Server struct {
 	users         *users.Service
 	accounts      *auth.AccountService
 	posts         *posts.Service
+	communities   *communities.Service
 	media         *media.Service
 	notifications *notifications.Service
 	moderation    *moderation.Service
@@ -59,6 +61,9 @@ func WithAccounts(service *auth.AccountService) Option {
 	return func(s *Server) { s.accounts = service }
 }
 func WithPosts(service *posts.Service) Option { return func(s *Server) { s.posts = service } }
+func WithCommunities(service *communities.Service) Option {
+	return func(s *Server) { s.communities = service }
+}
 func WithMedia(service *media.Service) Option { return func(s *Server) { s.media = service } }
 func WithNotifications(service *notifications.Service) Option {
 	return func(s *Server) { s.notifications = service }
@@ -135,6 +140,21 @@ func New(service *auth.Service, cfg Config, healthy func(context.Context) error,
 			m.Delete("/{id}/follow", func(w http.ResponseWriter, r *http.Request) { s.relationship(w, r, "unfollow") })
 			m.Post("/{id}/block", func(w http.ResponseWriter, r *http.Request) { s.relationship(w, r, "block") })
 			m.Delete("/{id}/block", func(w http.ResponseWriter, r *http.Request) { s.relationship(w, r, "unblock") })
+		})
+	})
+	router.Route("/api/v1/communities", func(r chi.Router) {
+		r.Use(s.requireUser)
+		r.Get("/", s.listCommunities)
+		r.Get("/{id}", s.getCommunity)
+		r.Get("/{id}/members", s.communityMembers)
+		r.Get("/{id}/posts", func(w http.ResponseWriter, r *http.Request) { s.postList(w, r, "community") })
+		r.Group(func(m chi.Router) {
+			m.Use(s.originCheck, NewLimiter(60, time.Minute, 4096).Middleware)
+			m.Post("/", s.createCommunity)
+			m.Patch("/{id}", s.updateCommunity)
+			m.Delete("/{id}", s.archiveCommunity)
+			m.Post("/{id}/membership", s.communityMembership)
+			m.Delete("/{id}/membership", s.communityMembership)
 		})
 	})
 	router.Route("/api/v1/posts", func(r chi.Router) {
@@ -249,10 +269,20 @@ func (s *Server) handleError(w http.ResponseWriter, err error) {
 		fail(w, 401, "unauthorized", "Credenziali o sessione non valide.", nil)
 	case errors.Is(err, users.ErrNotFound):
 		fail(w, 404, "profile_not_found", "Profilo non disponibile.", nil)
+	case errors.Is(err, communities.ErrNotFound):
+		fail(w, 404, "community_not_found", "Community non disponibile.", nil)
+	case errors.Is(err, communities.ErrForbidden):
+		fail(w, 403, "community_forbidden", "Questa azione richiede l’iscrizione alla community o i permessi del proprietario.", nil)
+	case errors.Is(err, communities.ErrOwnerLeave):
+		fail(w, 409, "community_owner_leave", "Il proprietario può archiviare la community, ma non abbandonarla finché è attiva.", nil)
+	case errors.Is(err, communities.ErrLimit):
+		fail(w, 409, "community_limit", "Puoi possedere al massimo 10 community attive.", nil)
 	case errors.Is(err, posts.ErrNotFound):
 		fail(w, 404, "post_not_found", "Post non disponibile.", nil)
 	case errors.Is(err, posts.ErrForbidden):
 		fail(w, 403, "post_forbidden", "Puoi modificare o eliminare solo i tuoi post.", nil)
+	case errors.Is(err, posts.ErrCommunityShare):
+		fail(w, 403, "community_sharing_disabled", "I post delle community non possono essere ripubblicati o citati.", nil)
 	case errors.Is(err, users.ErrBlocked):
 		fail(w, 403, "relationship_blocked", "Questa connessione non è consentita.", nil)
 	case errors.Is(err, media.ErrNotFound), errors.Is(err, notifications.ErrNotFound):

@@ -60,6 +60,7 @@ func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
 		"DELETE FROM rate_limits WHERE window_start<now()-interval '10 minutes'",
 		"DELETE FROM reports WHERE reviewed_at<now()-interval '180 days'",
 		"DELETE FROM moderation_actions WHERE created_at<now()-interval '180 days'",
+		"DELETE FROM community_events WHERE created_at<now()-interval '180 days'",
 	}
 	for _, statement := range statements {
 		if _, err = s.Pool.Exec(ctx, statement); err != nil {

@@ -1,10 +1,34 @@
-# Radura · Sprint 7 — usabilità, accessibilità e affidabilità
+# Radura · Sprint 8 — community
 
-**Dominio e hosting rimandati**, per scelta dell’utente. Lo Sprint 7 consolida la beta locale. I file già predisposti per VPS/HTTPS pubblico sono conservati come riferimento in [dominio e server](docs/operations/domain-server.md); nessun acquisto o deploy, nessuna migrazione verso Vercel/Render/Supabase.
+**Dominio e hosting rimandati**, per scelta dell’utente. Lo Sprint 8 aggiunge le community alla beta locale. I file già predisposti per VPS/HTTPS pubblico sono conservati come riferimento in [dominio e server](docs/operations/domain-server.md); nessun acquisto o deploy, nessuna migrazione verso Vercel/Render/Supabase.
 
 Social indipendente, nome interno **Twitter Revival**. Brand, testi, icone SVG e illustrazioni CSS originali. Nessuna affiliazione con Twitter/X, nessuno scraping o asset proprietario. Account, profili, follow, blocchi, post e interazioni sono reali e persistenti. La home autenticata mostra il feed cronologico dei seguiti e i propri post. Senza accesso compare solo un'anteprima esplicitamente **Demo**.
 
-## Miglioramenti dello Sprint 7
+## Community dello Sprint 8
+
+Apri **Community** nella navigazione. Dopo l’accesso puoi scoprire tutte le community della beta, filtrare **Le mie**, crearne una con nome, descrizione e regole e iscriverti liberamente. Il creatore è automaticamente proprietario e membro; può modificare i dettagli e archiviare la community. Massimo 10 community attive per proprietario. Il proprietario deve archiviare la community anziché abbandonarla; non sono previsti trasferimento della proprietà, gruppi privati o inviti di gruppo in questo sprint.
+
+**Nome, descrizione, regole e membri sono visibili nella beta; i post e le immagini soltanto ai membri attuali.** Il feed della community è cronologico e paginato. Pubblicazione, immagini, risposte, like, modifica e cancellazione dei propri post usano API e database reali. Le risposte ereditano la community sul server. I post della community restano fuori da home, profili e ricerca generale; repost e citazioni sono disabilitati per evitare di allargarne il pubblico.
+
+Abbandonare revoca l’accesso, senza cancellare i post già pubblicati; puoi iscriverti nuovamente. Blocchi, sospensioni e oscuramento dei post rimangono attivi. Puoi segnalare post e profili; per abusi nel nome o nelle regole, segnala il profilo del proprietario indicando la community. I moderatori del sito possono leggere le evidenze dei post segnalati e archiviare le community. L’archiviazione nasconde gruppo e contenuti; non è disponibile il ripristino dall’interfaccia.
+
+L’esportazione personale comprende community possedute, iscrizioni, propri post con `community_id` e propri eventi tecnici. La cancellazione dell’account archivia le community possedute, cancella i loro metadati personali e rimuove le iscrizioni. [Architettura](docs/architecture/sprint-8.md), [matrice UI](docs/reverse-engineering/sprint-8-matrix.md), [sicurezza e limiti](docs/security/sprint-8-review.md), [verifiche](docs/implementation-status.md).
+
+| Metodo e percorso                                  | Risultato                                                       |
+| -------------------------------------------------- | --------------------------------------------------------------- |
+| `GET /api/v1/communities?mine=1&cursor=…&limit=20` | Elenco paginato; omettere `mine` per tutte                      |
+| `POST /api/v1/communities`                         | `{name,description,rules}` → 201, proprietario già iscritto     |
+| `GET /api/v1/communities/{id}`                     | Metadati, conteggio membri e permessi correnti                  |
+| `PATCH /api/v1/communities/{id}`                   | Aggiorna nome/descrizione/regole, solo proprietario             |
+| `DELETE /api/v1/communities/{id}`                  | `{}` → 204, archiviazione da proprietario o moderatore del sito |
+| `POST /api/v1/communities/{id}/membership`         | `{}` → 204, iscrizione idempotente                              |
+| `DELETE /api/v1/communities/{id}/membership`       | `{}` → 204, uscita idempotente; 409 per proprietario            |
+| `GET /api/v1/communities/{id}/members`             | Membri paginati, con filtri per blocchi e stato                 |
+| `GET /api/v1/communities/{id}/posts`               | Feed paginato, solo membri (403 altrimenti)                     |
+
+Tutti questi endpoint richiedono una sessione valida. Le mutazioni richiedono origin autorizzata e header CSRF, come le altre API. `POST /api/v1/posts` accetta anche `community_id`; il dettaglio post restituisce 404 a chi non può leggerlo, e lo stesso controllo protegge immagini e notifiche.
+
+## Miglioramenti dello Sprint 7 conservati
 
 - Navigazione nominata anche su tablet, salto al contenuto con focus, pagina corrente indicata su desktop/mobile, contrasto dei testi secondari migliorato. Azioni dei post leggibili con conteggi e iniziali degli avatar.
 - Accesso, recupero password e modifica profilo portano il focus al primo campo errato o al messaggio generale, conservando i valori del form.
@@ -21,7 +45,7 @@ Dalla cartella `twitter-revival-codex`, con Docker Desktop avviato:
 ./scripts/start-local-beta.ps1 -Build
 ```
 
-Se `.env` non esiste, copiarlo una sola volta da `.env.example` e configurare password DB, `DATABASE_URL` e segreto S3. Se esiste, conservarlo. Lo script aggiunge solo `METRICS_TOKEN` se manca, preserva i segreti esistenti, applica la migrazione 006 e avvia Caddy e Prometheus su loopback. Avvii successivi: `./scripts/start-local-beta.ps1`. Non usare `down -v` sul progetto attivo.
+Se `.env` non esiste, copiarlo una sola volta da `.env.example` e configurare password DB, `DATABASE_URL` e segreto S3. Se esiste, conservarlo. Lo script aggiunge solo `METRICS_TOKEN` se manca, preserva i segreti esistenti, applica le migrazioni fino alla 007 e avvia Caddy e Prometheus su loopback. Per aggiornare dallo Sprint 7 usare `./scripts/start-local-beta.ps1 -Build`; avvii successivi: `./scripts/start-local-beta.ps1`. Non usare `down -v` sul progetto attivo.
 
 - **Sito: https://localhost:3443**. Richiede un nuovo accesso dopo il passaggio da HTTP.
 - **Monitor: http://localhost:9090** → Targets, query e Alerts. Metriche per 7 giorni, nessuna notifica esterna.
@@ -168,7 +192,7 @@ npm run start
 
 `004_discovery_media.up.sql` aggiunge media/post_media, notifiche con trigger/view, campo generato FTS e indice GIN. Conserva post e interazioni esistenti; nessun backfill delle notifiche storiche.
 
-Il runner incorpora SQL, registra `schema_migrations` e acquisisce un advisory lock transazionale. `up` applica le versioni pendenti; `down` annulla **solo l'ultima**. Versioni sconosciute/non contigue rifiutate. Il primo rollback annulla la 006: elimina coorti, inviti, indicatori beta e intenti email, preservando account, sessioni, post, media e moderazione. Richiede API ferme e il binario dello sprint precedente; gli intenti email pendenti vanno gestiti prima del rollback. Non recupera dati già cancellati dalla manutenzione. I successivi annullano 005, 004, 003, 002 e 001 con perdita dei rispettivi dati. Salvare un backup prima:
+Il runner incorpora SQL, registra `schema_migrations` e acquisisce un advisory lock transazionale. `up` applica le versioni pendenti; `down` annulla **solo l'ultima**. Versioni sconosciute/non contigue rifiutate. Il primo rollback annulla la 007: elimina community, iscrizioni ed eventi soltanto se non esiste alcun post di community, incluse le tombstone. In presenza di questi post rifiuta tutta l’operazione: eliminare il vincolo di visibilità potrebbe renderli pubblici. Non aggirare questo controllo; conservare un backup e predisporre una migrazione assistita se serve tornare allo Sprint 7. Con database senza post di community, coordinare il rollback con API ferme e binario dello sprint precedente. Il rollback successivo della 006 elimina coorti, inviti, indicatori beta e intenti email; i successivi annullano 005, 004, 003, 002 e 001 con perdita dei rispettivi dati. Salvare un backup prima:
 
 ```sh
 cd services/api
@@ -176,7 +200,7 @@ go run ./cmd/server -migrate=down
 go run ./cmd/server -migrate=up
 ```
 
-`citext` resta al rollback perché potrebbe essere condivisa. Query parametrizzate in `db/queries/`, codice tipizzato generato con **sqlc 1.31.1** in `internal/db`. Per rigenerare, da `services/api`: `sqlc generate`. API con schema versione **6**; healthcheck su DB/schema e S3. Test rollback su schemi isolati, senza azzerare il sito.
+`citext` resta al rollback perché potrebbe essere condivisa. Query parametrizzate in `db/queries/`, codice tipizzato generato con **sqlc 1.31.1** in `internal/db`; i moduli beta, moderazione e community usano inoltre query parametrizzate locali. Per rigenerare, da `services/api`: `sqlc generate`. API con schema versione **7**; healthcheck su DB/schema e S3. Test rollback su schemi isolati, senza azzerare il sito.
 
 ## Contratto HTTP
 
@@ -367,6 +391,14 @@ npm run test:ux
 ```
 
 `test:unit` usa il runner Playwright in Node senza browser né backend, con fetch di test. `test:ux` comprende audit axe, tastiera, 320 px e testo al 200%, validazioni e recupero dopo guasti. Gli account di collaudo sono sintetici, esclusi dalle metriche pilota e cancellati dalle fixture. Gli errori di rete, HTTP e payload sono iniettati soltanto nel browser; la paginazione di un test usa un cursore sintetico e post realmente letti dal database. Queste prove non certificano conformità WCAG e non sostituiscono un collaudo umano con screen reader.
+
+Con le stesse variabili, per i soli percorsi community e il layout con nomi lunghi, 320 px e testo al 200%:
+
+```powershell
+npx playwright test communities.spec.ts community-layout.spec.ts
+```
+
+I test Go delle community verificano anche media/notifiche dopo l’uscita, impossibilità di pubblicare contenuti di gruppo fuori dal gruppo, quota di creazione, scritture concorrenti con uscita/archiviazione, export personale e rifiuto del downgrade quando esistono post riservati.
 
 Per tutta la regressione locale usare `E2E_AUTH=1`, `E2E_MAILPIT=1` e `npm run test:smoke` con la stessa base HTTPS. L’eccezione TLS dei contesti Chromium è limitata a `https://localhost:3443`; `npm run test:https` verifica separatamente catena CA, hostname e cookie Secure. Nessuna fiducia globale installata nel sistema.
 
