@@ -1,4 +1,12 @@
 services:
+  mailpit:
+    image: axllent/mailpit:v1.31.6
+    ports:
+      - "127.0.0.1:8025:8025"
+      - "127.0.0.1:1025:1025"
+    environment:
+      MP_MAX_MESSAGES: 1000
+    restart: unless-stopped
   db:
     image: postgres:18-alpine
     environment:
@@ -33,7 +41,12 @@ services:
       APP_ORIGIN: ${APP_ORIGIN:-http://localhost:3000}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-168}
+      SMTP_ADDR: mailpit:1025
+      SMTP_FROM: ${SMTP_FROM:-Radura <no-reply@radura.test>}
+      SMTP_STARTTLS: "false"
     depends_on:
+      mailpit:
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
     healthcheck:
@@ -50,6 +63,7 @@ services:
       args:
         API_INTERNAL_URL: http://api:8080
         NEXT_PUBLIC_PRODUCT_NAME: ${NEXT_PUBLIC_PRODUCT_NAME:-Radura}
+        NEXT_PUBLIC_DEV_MAILBOX_URL: http://localhost:8025
     environment:
       HOSTNAME: 0.0.0.0
       PORT: 3000

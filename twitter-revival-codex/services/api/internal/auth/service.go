@@ -133,7 +133,7 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	if err = s.repo.CreateSession(ctx, account.User.ID, session); err != nil {
+	if err = s.repo.CreateSession(ctx, account.User.ID, session, account.PasswordHash); err != nil {
 		return Result{}, err
 	}
 	result.User = account.User

@@ -17,11 +17,13 @@ var ErrUnauthorized = errors.New("unauthorized")
 var ErrBusy = errors.New("password workers busy")
 
 type User struct {
-	ID          string    `json:"id"`
-	Handle      string    `json:"handle"`
-	Email       string    `json:"email"`
-	DisplayName string    `json:"display_name"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID            string    `json:"id"`
+	Handle        string    `json:"handle"`
+	Email         string    `json:"email"`
+	DisplayName   string    `json:"display_name"`
+	CreatedAt     time.Time `json:"created_at"`
+	EmailVerified bool      `json:"email_verified"`
+	AvatarStyle   string    `json:"avatar_style"`
 }
 
 type Account struct {
@@ -38,7 +40,7 @@ type NewSession struct {
 type Repository interface {
 	Register(context.Context, NewUser, NewSession) (User, error)
 	FindAccount(context.Context, string) (Account, error)
-	CreateSession(context.Context, string, NewSession) error
+	CreateSession(context.Context, string, NewSession, string) error
 	SessionUser(context.Context, []byte) (User, error)
 	RevokeSession(context.Context, []byte) error
 }
@@ -60,7 +62,7 @@ func (r *PostgresRepository) Register(ctx context.Context, input NewUser, sessio
 		}
 		return User{}, err
 	}
-	user := User{ID: row.ID, Handle: row.Handle, Email: row.Email, DisplayName: input.DisplayName, CreatedAt: row.CreatedAt.Time}
+	user := User{ID: row.ID, Handle: row.Handle, Email: row.Email, DisplayName: input.DisplayName, CreatedAt: row.CreatedAt.Time.UTC(), AvatarStyle: "sage"}
 	if err = queries.InsertProfile(ctx, db.InsertProfileParams{UserID: user.ID, DisplayName: input.DisplayName}); err != nil {
 		return User{}, err
 	}
@@ -75,24 +77,39 @@ func (r *PostgresRepository) Register(ctx context.Context, input NewUser, sessio
 
 func (r *PostgresRepository) FindAccount(ctx context.Context, email string) (Account, error) {
 	row, err := db.New(r.Pool).FindAccount(ctx, email)
-	a := Account{User: User{ID: row.ID, Handle: row.Handle, Email: row.Email, DisplayName: row.DisplayName, CreatedAt: row.CreatedAt.Time}, PasswordHash: row.PasswordHash, Status: row.Status}
+	a := Account{User: User{ID: row.ID, Handle: row.Handle, Email: row.Email, DisplayName: row.DisplayName, CreatedAt: row.CreatedAt.Time.UTC(), EmailVerified: row.EmailVerified, AvatarStyle: row.AvatarStyle}, PasswordHash: row.PasswordHash, Status: row.Status}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return a, ErrUnauthorized
 	}
 	return a, err
 }
 
-func (r *PostgresRepository) CreateSession(ctx context.Context, userID string, session NewSession) error {
-	rows, err := db.New(r.Pool).InsertActiveSession(ctx, db.InsertActiveSessionParams{UserID: userID, TokenHash: session.Hash, ExpiresAt: pgtype.Timestamptz{Time: session.ExpiresAt, Valid: true}})
+func (r *PostgresRepository) CreateSession(ctx context.Context, userID string, session NewSession, expectedHash string) error {
+	tx, err := r.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	queries := db.New(tx)
+	if _, err = queries.LockActiveAccount(ctx, userID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrUnauthorized
+		}
+		return err
+	}
+	rows, err := queries.InsertActiveSession(ctx, db.InsertActiveSessionParams{UserID: userID, TokenHash: session.Hash, ExpiresAt: pgtype.Timestamptz{Time: session.ExpiresAt, Valid: true}, ExpectedPasswordHash: expectedHash})
 	if err == nil && rows == 0 {
 		return ErrUnauthorized
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (r *PostgresRepository) SessionUser(ctx context.Context, hash []byte) (User, error) {
 	row, err := db.New(r.Pool).FindSessionUser(ctx, hash)
-	u := User{ID: row.ID, Handle: row.Handle, Email: row.Email, DisplayName: row.DisplayName, CreatedAt: row.CreatedAt.Time}
+	u := User{ID: row.ID, Handle: row.Handle, Email: row.Email, DisplayName: row.DisplayName, CreatedAt: row.CreatedAt.Time.UTC(), EmailVerified: row.EmailVerified, AvatarStyle: row.AvatarStyle}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return u, ErrUnauthorized
 	}

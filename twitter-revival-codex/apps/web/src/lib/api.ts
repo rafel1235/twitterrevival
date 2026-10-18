@@ -4,6 +4,8 @@ export type User = {
   email: string;
   display_name: string;
   created_at: string;
+  email_verified: boolean;
+  avatar_style: string;
 };
 type Failure = {
   error?: { message?: string; fields?: Record<string, string> };
@@ -21,21 +23,26 @@ export class ApiError extends Error {
 
 export async function api<T>(
   path: string,
-  options: { body?: unknown; signal?: AbortSignal } = {},
+  options: {
+    body?: unknown;
+    signal?: AbortSignal;
+    method?: "GET" | "POST" | "PATCH" | "DELETE";
+  } = {},
 ): Promise<T> {
   let response: Response;
+  const method =
+    options.method ?? (options.body === undefined ? "GET" : "POST");
+  const mutation = method !== "GET";
   try {
     response = await fetch(`/api/v1${path}`, {
-      method: options.body === undefined ? "GET" : "POST",
+      method,
       credentials: "same-origin",
       cache: "no-store",
       signal: options.signal,
-      headers:
-        options.body === undefined
-          ? undefined
-          : { "Content-Type": "application/json", "X-CSRF-Protection": "1" },
-      body:
-        options.body === undefined ? undefined : JSON.stringify(options.body),
+      headers: !mutation
+        ? undefined
+        : { "Content-Type": "application/json", "X-CSRF-Protection": "1" },
+      body: mutation ? JSON.stringify(options.body ?? {}) : undefined,
     });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") throw error;
@@ -45,6 +52,12 @@ export async function api<T>(
     );
   }
   if (!response.ok) {
+    if (
+      response.status === 401 &&
+      path !== "/auth/login" &&
+      typeof window !== "undefined"
+    )
+      window.dispatchEvent(new Event("radura:session-expired"));
     const payload: Failure = await response.json().catch(() => ({}));
     throw new ApiError(
       response.status,

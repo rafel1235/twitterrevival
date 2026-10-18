@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useSession } from "@/components/auth/session-provider";
 import { Icon } from "./icon";
+import { UserAvatar } from "@/components/profile/shared";
 
 export const productName = process.env.NEXT_PUBLIC_PRODUCT_NAME || "Radura";
 
@@ -34,9 +35,11 @@ function AccountPanel() {
       ) : user ? (
         <>
           <div className="account-identity">
-            <span className="avatar small">
-              {Array.from(user.display_name)[0]}
-            </span>
+            <UserAvatar
+              name={user.display_name}
+              style={user.avatar_style}
+              small
+            />
             <div>
               <strong data-testid="session-name">{user.display_name}</strong>
               <span className="muted">@{user.handle}</span>
@@ -76,6 +79,7 @@ function AccountPanel() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { user } = useSession();
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main">
@@ -120,29 +124,33 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               Notifiche <small>Sprint 4</small>
             </span>
           </button>
-          <button
-            className="nav-item"
-            disabled
-            title="Profili disponibili in Sprint 2"
+          <Link
+            href="/people"
+            className={`nav-item ${pathname === "/people" ? "active" : ""}`}
+            aria-label="Persone"
+          >
+            <Icon name="search" />
+            <span>Persone</span>
+          </Link>
+          <Link
+            className={`nav-item ${pathname.startsWith("/u/") ? "active" : ""}`}
+            href={user ? `/u/${user.handle}` : "/login"}
+            aria-label="Il tuo profilo"
           >
             <Icon name="user" />
-            <span>
-              Profilo <small>Sprint 2</small>
-            </span>
-          </button>
-          <button
-            className="nav-item"
-            disabled
-            title="Impostazioni disponibili negli sprint successivi"
+            <span>Profilo</span>
+          </Link>
+          <Link
+            className={`nav-item ${pathname.startsWith("/settings/") ? "active" : ""}`}
+            href="/settings/profile"
+            aria-label="Impostazioni profilo"
           >
             <Icon name="settings" />
-            <span>
-              Impostazioni <small>In arrivo</small>
-            </span>
-          </button>
+            <span>Impostazioni</span>
+          </Link>
         </nav>
         <div className="sprint-note">
-          <span className="status-dot" /> Sprint 1 · Le fondamenta
+          <span className="status-dot" /> Sprint 2 · Incontriamoci
         </div>
         <AccountPanel />
         <p className="independent-note">
@@ -185,17 +193,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <section className="info-card">
           <h2>Un passo alla volta</h2>
           <div className="milestone">
-            <span className="milestone-number current">01</span>
+            <span className="milestone-number">01</span>
             <div>
               <strong>Mettiamo radici</strong>
-              <p>Account e accesso · Sprint attuale</p>
+              <p>Account e accesso · Completato</p>
             </div>
           </div>
           <div className="milestone">
-            <span className="milestone-number">02</span>
+            <span className="milestone-number current">02</span>
             <div>
               <strong>Incontriamoci</strong>
-              <p>Profili e connessioni · Sprint 2</p>
+              <p>Profili e connessioni · Sprint attuale</p>
             </div>
           </div>
           <div className="milestone">
@@ -219,15 +227,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         >
           <Icon name="home" />
         </Link>
-        <span aria-label="Esplora disponibile in Sprint 4">
+        <Link href="/people" aria-label="Persone">
           <Icon name="search" />
-          <small>Sprint 4</small>
-        </span>
-        <span aria-label="Notifiche disponibili in Sprint 4">
-          <Icon name="bell" />
-          <small>Sprint 4</small>
-        </span>
-        <Link href="/login" aria-label="Account">
+        </Link>
+        <Link href="/settings/profile" aria-label="Impostazioni profilo">
+          <Icon name="settings" />
+        </Link>
+        <Link
+          href={user ? `/u/${user.handle}` : "/login"}
+          aria-label={user ? "Il tuo profilo" : "Account"}
+        >
           <Icon name="user" />
         </Link>
       </nav>

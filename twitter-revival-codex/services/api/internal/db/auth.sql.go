@@ -12,18 +12,20 @@ import (
 )
 
 const findAccount = `-- name: FindAccount :one
-SELECT u.id,u.handle,u.email,p.display_name,u.created_at,u.password_hash,u.status
+SELECT u.id,u.handle,u.email,p.display_name,p.avatar_style,u.created_at,u.password_hash,u.status,(u.email_verified_at IS NOT NULL)::boolean AS email_verified
 FROM users u JOIN profiles p ON p.user_id=u.id WHERE u.email=$1
 `
 
 type FindAccountRow struct {
-	ID           string
-	Handle       string
-	Email        string
-	DisplayName  string
-	CreatedAt    pgtype.Timestamptz
-	PasswordHash string
-	Status       string
+	ID            string
+	Handle        string
+	Email         string
+	DisplayName   string
+	AvatarStyle   string
+	CreatedAt     pgtype.Timestamptz
+	PasswordHash  string
+	Status        string
+	EmailVerified bool
 }
 
 func (q *Queries) FindAccount(ctx context.Context, email string) (FindAccountRow, error) {
@@ -34,25 +36,29 @@ func (q *Queries) FindAccount(ctx context.Context, email string) (FindAccountRow
 		&i.Handle,
 		&i.Email,
 		&i.DisplayName,
+		&i.AvatarStyle,
 		&i.CreatedAt,
 		&i.PasswordHash,
 		&i.Status,
+		&i.EmailVerified,
 	)
 	return i, err
 }
 
 const findSessionUser = `-- name: FindSessionUser :one
-SELECT u.id,u.handle,u.email,p.display_name,u.created_at
+SELECT u.id,u.handle,u.email,p.display_name,p.avatar_style,u.created_at,(u.email_verified_at IS NOT NULL)::boolean AS email_verified
 FROM sessions s JOIN users u ON u.id=s.user_id JOIN profiles p ON p.user_id=u.id
 WHERE s.token_hash=$1 AND s.revoked_at IS NULL AND s.expires_at>now() AND u.status='active'
 `
 
 type FindSessionUserRow struct {
-	ID          string
-	Handle      string
-	Email       string
-	DisplayName string
-	CreatedAt   pgtype.Timestamptz
+	ID            string
+	Handle        string
+	Email         string
+	DisplayName   string
+	AvatarStyle   string
+	CreatedAt     pgtype.Timestamptz
+	EmailVerified bool
 }
 
 func (q *Queries) FindSessionUser(ctx context.Context, tokenHash []byte) (FindSessionUserRow, error) {
@@ -63,7 +69,9 @@ func (q *Queries) FindSessionUser(ctx context.Context, tokenHash []byte) (FindSe
 		&i.Handle,
 		&i.Email,
 		&i.DisplayName,
+		&i.AvatarStyle,
 		&i.CreatedAt,
+		&i.EmailVerified,
 	)
 	return i, err
 }
@@ -71,17 +79,23 @@ func (q *Queries) FindSessionUser(ctx context.Context, tokenHash []byte) (FindSe
 const insertActiveSession = `-- name: InsertActiveSession :execrows
 INSERT INTO sessions(user_id,token_hash,expires_at)
 SELECT id,$1::bytea,$2::timestamptz
-FROM users WHERE id=$3::uuid AND status='active'
+FROM users WHERE id=$3::uuid AND status='active' AND password_hash=$4
 `
 
 type InsertActiveSessionParams struct {
-	TokenHash []byte
-	ExpiresAt pgtype.Timestamptz
-	UserID    string
+	TokenHash            []byte
+	ExpiresAt            pgtype.Timestamptz
+	UserID               string
+	ExpectedPasswordHash string
 }
 
 func (q *Queries) InsertActiveSession(ctx context.Context, arg InsertActiveSessionParams) (int64, error) {
-	result, err := q.db.Exec(ctx, insertActiveSession, arg.TokenHash, arg.ExpiresAt, arg.UserID)
+	result, err := q.db.Exec(ctx, insertActiveSession,
+		arg.TokenHash,
+		arg.ExpiresAt,
+		arg.UserID,
+		arg.ExpectedPasswordHash,
+	)
 	if err != nil {
 		return 0, err
 	}

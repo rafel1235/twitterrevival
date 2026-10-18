@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"radura.local/api/internal/auth"
+	"radura.local/api/internal/users"
 )
 
 type Config struct {
@@ -28,6 +29,8 @@ type Server struct {
 	cookieName string
 	healthy    func(context.Context) error
 	limiter    *Limiter
+	users      *users.Service
+	accounts   *auth.AccountService
 }
 type apiError struct {
 	Code    string            `json:"code"`
@@ -35,7 +38,14 @@ type apiError struct {
 	Fields  map[string]string `json:"fields,omitempty"`
 }
 
-func New(service *auth.Service, cfg Config, healthy func(context.Context) error) (http.Handler, error) {
+type Option func(*Server)
+
+func WithUsers(service *users.Service) Option { return func(s *Server) { s.users = service } }
+func WithAccounts(service *auth.AccountService) Option {
+	return func(s *Server) { s.accounts = service }
+}
+
+func New(service *auth.Service, cfg Config, healthy func(context.Context) error, options ...Option) (http.Handler, error) {
 	origin, err := url.Parse(cfg.Origin)
 	if err != nil || origin.Host == "" || origin.User != nil || origin.Path != "" || origin.RawQuery != "" || origin.Fragment != "" || (origin.Scheme != "http" && origin.Scheme != "https") {
 		return nil, errors.New("APP_ORIGIN must be an exact http(s) origin without path")
@@ -52,6 +62,9 @@ func New(service *auth.Service, cfg Config, healthy func(context.Context) error)
 		name = "__Host-radura_session"
 	}
 	s := &Server{auth: service, cfg: cfg, cookieName: name, healthy: healthy, limiter: NewLimiter(30, time.Minute, 4096)}
+	for _, option := range options {
+		option(s)
+	}
 	router := chi.NewRouter()
 	router.Use(s.recoverJSON, middleware.Timeout(10*time.Second), s.headers)
 	router.Get("/healthz", s.health)
@@ -62,6 +75,28 @@ func New(service *auth.Service, cfg Config, healthy func(context.Context) error)
 			m.Post("/register", s.register)
 			m.Post("/login", s.login)
 			m.Post("/logout", s.logout)
+		})
+		r.Group(func(m chi.Router) {
+			m.Use(s.originCheck, NewLimiter(10, time.Minute, 4096).Middleware)
+			m.With(s.requireUser).Post("/verification/request", s.requestVerification)
+			m.Post("/verification/confirm", s.confirmVerification)
+			m.Post("/password/forgot", s.forgotPassword)
+			m.Post("/password/reset", s.resetPassword)
+		})
+	})
+	router.Route("/api/v1/users", func(r chi.Router) {
+		r.Use(s.requireUser)
+		r.Get("/me/blocks", s.blockedUsers)
+		r.Get("/{handle}", s.profile)
+		r.Get("/{id}/followers", func(w http.ResponseWriter, r *http.Request) { s.connections(w, r, "followers") })
+		r.Get("/{id}/following", func(w http.ResponseWriter, r *http.Request) { s.connections(w, r, "following") })
+		r.Group(func(m chi.Router) {
+			m.Use(s.originCheck, NewLimiter(60, time.Minute, 4096).Middleware)
+			m.Patch("/me", s.updateProfile)
+			m.Post("/{id}/follow", func(w http.ResponseWriter, r *http.Request) { s.relationship(w, r, "follow") })
+			m.Delete("/{id}/follow", func(w http.ResponseWriter, r *http.Request) { s.relationship(w, r, "unfollow") })
+			m.Post("/{id}/block", func(w http.ResponseWriter, r *http.Request) { s.relationship(w, r, "block") })
+			m.Delete("/{id}/block", func(w http.ResponseWriter, r *http.Request) { s.relationship(w, r, "unblock") })
 		})
 	})
 	router.NotFound(func(w http.ResponseWriter, r *http.Request) { fail(w, 404, "not_found", "Endpoint inesistente.", nil) })
@@ -90,6 +125,12 @@ func (s *Server) handleError(w http.ResponseWriter, err error) {
 		fail(w, 409, "account_exists", "Handle o email già registrati.", nil)
 	case errors.Is(err, auth.ErrUnauthorized):
 		fail(w, 401, "unauthorized", "Credenziali o sessione non valide.", nil)
+	case errors.Is(err, users.ErrNotFound):
+		fail(w, 404, "profile_not_found", "Profilo non disponibile.", nil)
+	case errors.Is(err, users.ErrBlocked):
+		fail(w, 403, "relationship_blocked", "Questa connessione non è consentita.", nil)
+	case errors.Is(err, auth.ErrInvalidToken):
+		fail(w, 400, "invalid_token", "Link non valido, scaduto o già utilizzato. Richiedine uno nuovo.", nil)
 	case errors.Is(err, auth.ErrBusy):
 		w.Header().Set("Retry-After", "5")
 		fail(w, 503, "auth_busy", "Servizio occupato, riprova tra poco.", nil)
@@ -142,6 +183,11 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.setCookie(w, result.Token, result.ExpiresAt)
+	if s.accounts != nil {
+		if err = s.accounts.RequestVerification(result.User.ID); err != nil {
+			slog.Error("verification email could not be queued")
+		}
+	}
 	respond(w, 201, map[string]any{"data": map[string]any{"user": result.User}})
 }
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
@@ -174,7 +220,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 		s.handleError(w, err)
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: s.cookieName, Value: "", Path: "/", HttpOnly: true, Secure: s.cfg.CookieSecure, SameSite: http.SameSiteLaxMode, MaxAge: -1, Expires: time.Unix(1, 0)})
+	s.clearCookie(w)
 	w.WriteHeader(http.StatusNoContent)
 }
 func (s *Server) token(r *http.Request) string {
@@ -201,7 +247,7 @@ func (s *Server) headers(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Referrer-Policy", "same-origin")
+		w.Header().Set("Referrer-Policy", "no-referrer")
 		next.ServeHTTP(w, r)
 	})
 }

@@ -8,6 +8,28 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AuthToken struct {
+	ID         string
+	UserID     string
+	Purpose    string
+	TokenHash  []byte
+	ExpiresAt  pgtype.Timestamptz
+	ConsumedAt pgtype.Timestamptz
+	CreatedAt  pgtype.Timestamptz
+}
+
+type Block struct {
+	BlockerID string
+	BlockedID string
+	CreatedAt pgtype.Timestamptz
+}
+
+type Follow struct {
+	FollowerID string
+	FollowedID string
+	CreatedAt  pgtype.Timestamptz
+}
+
 type Profile struct {
 	UserID       string
 	DisplayName  string
@@ -16,6 +38,7 @@ type Profile struct {
 	BannerKey    pgtype.Text
 	LocationText string
 	WebsiteUrl   pgtype.Text
+	AvatarStyle  string
 }
 
 type Session struct {

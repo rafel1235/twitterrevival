@@ -152,6 +152,11 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
             <p className="field-hint" id="password-hint">
               Almeno 12 caratteri, massimo 128 byte. Usa una password unica.
             </p>
+            {!register && (
+              <Link href="/forgot-password" className="text-button">
+                Password dimenticata?
+              </Link>
+            )}
             {error && (
               <div className="form-error" role="alert">
                 {error}
@@ -175,7 +180,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           </form>
         )}
         <p className="auth-footnote">
-          Anteprima Sprint 1. Gli account sono reali; feed e pubblicazione sono
+          Anteprima Sprint 2. Gli account sono reali; feed e pubblicazione sono
           ancora dimostrativi. Non inserire dati sensibili in questo ambiente di
           sviluppo.
         </p>

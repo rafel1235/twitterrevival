@@ -1,0 +1,311 @@
+.content {
+  padding: 24px;
+  line-height: 1.65;
+}
+.content h2 {
+  font-size: 21px;
+  letter-spacing: -0.5px;
+  margin-bottom: 8px;
+}
+.state {
+  padding: 42px 24px;
+  text-align: center;
+  color: var(--color-muted);
+}
+.state h1,
+.state h3 {
+  color: var(--color-text);
+  font-size: 22px;
+  margin-bottom: 10px;
+}
+.state p {
+  margin-bottom: 18px;
+}
+.state a,
+.state button {
+  margin-top: 16px;
+}
+.banner {
+  height: 155px;
+  background: linear-gradient(115deg, #dbe9d4, #e5eee2 60%, #ecdcb7);
+  position: relative;
+  overflow: hidden;
+}
+.banner span {
+  position: absolute;
+  width: 160px;
+  height: 160px;
+  border: 1px solid rgba(45, 112, 89, 0.17);
+  border-radius: 50%;
+  right: 15px;
+  top: -45px;
+}
+.banner span + span {
+  right: 80px;
+  top: 45px;
+  width: 210px;
+  height: 210px;
+}
+.profile {
+  padding: 0 24px 22px;
+}
+.profileTop {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: -40px;
+  position: relative;
+  margin-bottom: 18px;
+}
+.profileTop > a,
+.personRow button {
+  border: 1px solid var(--color-border);
+  background: #fff;
+}
+.largeAvatar {
+  width: 94px;
+  height: 94px;
+  font-size: 27px;
+  border: 5px solid #fff;
+}
+.profile h2 {
+  font-size: 23px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.bio {
+  margin: 16px 0 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 15px;
+}
+.details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 18px;
+  font-size: 12px;
+  color: var(--color-muted);
+  margin-top: 12px;
+}
+.details a {
+  color: var(--color-primary);
+  overflow-wrap: anywhere;
+}
+.counts {
+  display: flex;
+  gap: 24px;
+  margin-top: 18px;
+  font-size: 13px;
+  color: var(--color-muted);
+}
+.counts strong {
+  color: var(--color-text);
+}
+.counts a:hover,
+.personInfo a:hover {
+  text-decoration: underline;
+}
+.actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.outline {
+  border: 1px solid var(--color-primary);
+  color: var(--color-primary);
+  background: #fff;
+}
+.blockButton {
+  border: 0;
+  background: none;
+  padding: 6px;
+  font-size: 12px;
+  color: #98412d;
+}
+.followsYou {
+  font-size: 10px;
+  background: #eef3ef;
+  border-radius: 3px;
+  padding: 3px 6px;
+  margin-left: 8px;
+}
+.tabs {
+  display: flex;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+.tabs a {
+  flex: 1;
+  text-align: center;
+  padding: 16px 8px;
+  font-size: 13px;
+}
+.tabs a[aria-current="page"] {
+  color: var(--color-primary);
+  font-weight: 700;
+  border-bottom: 3px solid var(--color-primary);
+}
+.confirm {
+  padding: 16px;
+  background: #fff4ef;
+  border-radius: 12px;
+  margin-top: 18px;
+  font-size: 13px;
+}
+.confirm button {
+  margin-top: 14px;
+  margin-right: 16px;
+}
+.personRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--color-border);
+}
+.personInfo {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.personInfo > span {
+  display: block;
+}
+.personInfo strong {
+  font-size: 14px;
+}
+.personRow button {
+  font-size: 12px;
+  padding: 8px 14px;
+}
+.editForm {
+  max-width: 440px;
+  margin: 0 auto 30px;
+}
+.editForm textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #b9c7bf;
+  border-radius: 9px;
+  resize: vertical;
+  min-height: 110px;
+  background: white;
+  color: var(--color-text);
+}
+.editForm fieldset {
+  margin: 24px 0 12px;
+  padding: 0;
+  border: 0;
+}
+.editForm legend {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+.avatarPreview {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  font-size: 13px;
+}
+.palette {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.palette label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.palette span {
+  width: 68px;
+  height: 36px;
+  border-radius: 18px;
+  font-size: 11px;
+}
+.palette input {
+  accent-color: var(--color-primary);
+}
+.success {
+  color: #256146;
+  background: #eef7ef;
+  padding: 10px 12px;
+  border-radius: 7px;
+  margin: 12px 0;
+  font-size: 13px;
+}
+.emailSettings {
+  border-top: 1px solid var(--color-border);
+  padding-top: 28px;
+  max-width: 440px;
+  margin: auto;
+}
+.emailSettings p {
+  margin: 10px 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.emailSettings :global(.button) {
+  border: 1px solid var(--color-border);
+}
+.emailSettings > a {
+  display: block;
+  margin-top: 18px;
+}
+.localMail {
+  font-size: 11px !important;
+  color: var(--color-muted);
+  margin: 18px 0 !important;
+}
+.localMail a {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+@media (max-width: 600px) {
+  .content {
+    padding: 22px 18px;
+  }
+  .profile {
+    padding: 0 18px 20px;
+  }
+  .banner {
+    height: 130px;
+  }
+  .profileTop {
+    margin-top: -32px;
+  }
+  .largeAvatar {
+    width: 82px;
+    height: 82px;
+    font-size: 23px;
+  }
+  .actions {
+    gap: 7px;
+  }
+  .actions button {
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+  .profileTop > a {
+    font-size: 12px;
+    padding: 9px 13px;
+  }
+  .personRow {
+    padding: 17px 18px;
+  }
+  .avatarPreview {
+    gap: 10px;
+  }
+  .palette {
+    gap: 8px;
+  }
+  .palette span {
+    width: 62px;
+  }
+}

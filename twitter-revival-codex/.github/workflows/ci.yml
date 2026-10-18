@@ -1,4 +1,4 @@
-name: Sprint 1 checks
+name: Sprint 2 checks
 on: [push, pull_request]
 permissions:
   contents: read
@@ -6,6 +6,9 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     services:
+      mailpit:
+        image: axllent/mailpit:v1.31.6
+        ports: ["1025:1025", "8025:8025"]
       postgres:
         image: postgres:18-alpine
         env:
@@ -22,6 +25,11 @@ jobs:
       APP_ORIGIN: http://localhost:3000
       COOKIE_SECURE: "false"
       E2E_AUTH: "1"
+      E2E_MAILPIT: "1"
+      SMTP_ADDR: 127.0.0.1:1025
+      SMTP_FROM: Radura <no-reply@radura.test>
+      SMTP_STARTTLS: "false"
+      NEXT_PUBLIC_DEV_MAILBOX_URL: http://localhost:8025
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4

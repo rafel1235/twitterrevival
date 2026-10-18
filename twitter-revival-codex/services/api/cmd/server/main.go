@@ -16,6 +16,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"radura.local/api/internal/auth"
 	"radura.local/api/internal/httpapi"
+	"radura.local/api/internal/mailer"
+	"radura.local/api/internal/users"
 	"radura.local/api/migrations"
 )
 
@@ -80,9 +82,29 @@ func run() error {
 	}
 	healthy := func(ctx context.Context) error {
 		var version int
-		return pool.QueryRow(ctx, "SELECT version FROM schema_migrations WHERE version=1").Scan(&version)
+		if err := pool.QueryRow(ctx, "SELECT COALESCE(max(version),0) FROM schema_migrations").Scan(&version); err != nil {
+			return err
+		}
+		if version != migrations.CurrentVersion {
+			return errors.New("schema version mismatch")
+		}
+		return nil
 	}
-	handler, err := httpapi.New(service, httpapi.Config{Origin: env("APP_ORIGIN", "http://localhost:3000"), CookieSecure: secure, SessionTTL: duration}, healthy)
+	origin := env("APP_ORIGIN", "http://localhost:3000")
+	startTLS, err := strconv.ParseBool(env("SMTP_STARTTLS", "false"))
+	if err != nil {
+		return errors.New("invalid SMTP_STARTTLS")
+	}
+	if secure && !startTLS {
+		return errors.New("SMTP_STARTTLS is required with HTTPS")
+	}
+	sender, err := mailer.NewSMTP(env("SMTP_ADDR", "127.0.0.1:1025"), env("SMTP_FROM", "Radura <no-reply@radura.test>"), os.Getenv("SMTP_USERNAME"), os.Getenv("SMTP_PASSWORD"), startTLS)
+	if err != nil {
+		return err
+	}
+	accounts := auth.NewAccountService(&auth.PostgresRepository{Pool: pool}, service, sender, origin)
+	profiles := users.NewService(&users.Repository{Pool: pool})
+	handler, err := httpapi.New(service, httpapi.Config{Origin: origin, CookieSecure: secure, SessionTTL: duration}, healthy, httpapi.WithUsers(profiles), httpapi.WithAccounts(accounts))
 	if err != nil {
 		return err
 	}
@@ -92,6 +114,8 @@ func run() error {
 	server := &http.Server{Addr: addr, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 * 1024}
 	shutdown, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	accounts.Start(shutdown)
+	defer func() { stop(); accounts.Wait() }()
 	done := make(chan error, 1)
 	go func() { slog.Info("API listening", "addr", addr); done <- server.ListenAndServe() }()
 	select {

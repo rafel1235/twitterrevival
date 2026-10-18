@@ -1,0 +1,156 @@
+"use client";
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { api, ApiError } from "@/lib/api";
+import type { ConnectionPage } from "@/lib/profile";
+import { PageError, SessionGate, UserAvatar } from "./shared";
+import styles from "./profile.module.css";
+
+export function ConnectionList({
+  path,
+  empty,
+  blocked = false,
+}: {
+  path: string;
+  empty: string;
+  blocked?: boolean;
+}) {
+  const [page, setPage] = useState<ConnectionPage>({ users: [] });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState("");
+  const load = useCallback(
+    (cursor?: string, signal?: AbortSignal) =>
+      api<{ data: ConnectionPage }>(
+        `${path}?limit=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
+        { signal },
+      )
+        .then((response) => {
+          setPage((previous) =>
+            cursor
+              ? {
+                  ...response.data,
+                  users: [...previous.users, ...response.data.users],
+                }
+              : response.data,
+          );
+          setError("");
+        })
+        .catch((err: unknown) => {
+          if (
+            !signal?.aborted &&
+            err instanceof ApiError &&
+            [401, 404].includes(err.status)
+          )
+            setPage({ users: [] });
+          if (!signal?.aborted)
+            setError(
+              err instanceof Error ? err.message : "Caricamento non riuscito.",
+            );
+        })
+        .finally(() => {
+          if (!signal?.aborted) setLoading(false);
+        }),
+    [path],
+  );
+  useEffect(() => {
+    const controller = new AbortController();
+    void load(undefined, controller.signal);
+    return () => controller.abort();
+  }, [load]);
+  async function unblock(id: string) {
+    setPending(id);
+    setError("");
+    try {
+      await api(`/users/${id}/block`, { method: "DELETE", body: {} });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sblocco non riuscito.");
+    } finally {
+      setPending("");
+    }
+  }
+  return (
+    <section
+      className={styles.connectionList}
+      aria-label={blocked ? "Elenco utenti bloccati" : "Elenco connessioni"}
+    >
+      {error && <PageError message={error} retry={() => void load()} />}
+      <div aria-live="polite">
+        {page.users.map((person) => (
+          <div className={styles.personRow} key={person.id}>
+            <UserAvatar
+              name={person.display_name}
+              style={person.avatar_style}
+            />
+            <div className={styles.personInfo}>
+              {blocked ? (
+                <strong>{person.display_name}</strong>
+              ) : (
+                <Link href={`/u/${person.handle}`}>
+                  <strong>{person.display_name}</strong>
+                </Link>
+              )}
+              <span className="muted">@{person.handle}</span>
+            </div>
+            {blocked && (
+              <button
+                className="button"
+                disabled={!!pending}
+                aria-label={`Sblocca @${person.handle}`}
+                onClick={() => void unblock(person.id)}
+              >
+                {pending === person.id ? "Sblocco…" : "Sblocca"}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      {loading ? (
+        <p className={styles.state} role="status">
+          Caricamento…
+        </p>
+      ) : page.users.length === 0 && !error ? (
+        <p className={styles.state}>{empty}</p>
+      ) : null}
+      {page.next_cursor && (
+        <div className={styles.content}>
+          <button
+            className="text-button"
+            disabled={loading}
+            onClick={() => {
+              setLoading(true);
+              void load(page.next_cursor);
+            }}
+          >
+            Carica altri
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+export function BlockedUsers() {
+  return (
+    <SessionGate>
+      <header className="feed-header">
+        <div>
+          <h1>Utenti bloccati</h1>
+          <p>Solo tu puoi vedere questo elenco</p>
+        </div>
+        <Link href="/settings/profile" className="text-button">
+          Impostazioni
+        </Link>
+      </header>
+      <p className={styles.content}>
+        Il blocco nasconde i profili in entrambe le direzioni e rimuove i follow
+        reciproci.
+      </p>
+      <ConnectionList
+        path="/users/me/blocks"
+        empty="Non hai bloccato nessuno."
+        blocked
+      />
+    </SessionGate>
+  );
+}
