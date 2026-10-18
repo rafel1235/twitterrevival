@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import type { PostPage } from "@/lib/posts";
 import { PageError } from "@/components/profile/shared";
 import { PostCard } from "./post-card";
@@ -22,9 +22,11 @@ export function PostList({
   const [error, setError] = useState("");
   const sequence = useRef(0);
   const lifetime = useRef<AbortController | null>(null);
+  const lastCursor = useRef("");
   const load = useCallback(
     (cursor = "", signal = lifetime.current?.signal) => {
       const request = ++sequence.current;
+      lastCursor.current = cursor;
       return api<{ data: PostPage }>(
         `${path}${path.includes("?") ? "&" : "?"}limit=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
         { signal },
@@ -46,7 +48,8 @@ export function PostList({
         })
         .catch((err: unknown) => {
           if (signal?.aborted || request !== sequence.current) return;
-          if (!cursor) setData({ items: [] });
+          if (err instanceof ApiError && [401, 403, 404].includes(err.status))
+            setData({ items: [] });
           setError(
             err instanceof Error ? err.message : "Caricamento non riuscito.",
           );
@@ -90,9 +93,11 @@ export function PostList({
       {error && (
         <PageError
           message={error}
+          pending={pending}
+          stale={data.items.length > 0}
           retry={() => {
             setPending(true);
-            void load();
+            void load(lastCursor.current);
           }}
         />
       )}

@@ -94,6 +94,8 @@ p {
   flex-shrink: 0;
 }
 .brand-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 27px;
   line-height: 1.05;
   font-weight: 800;
@@ -128,6 +130,16 @@ p {
   background: var(--color-tint);
   color: var(--color-primary);
   font-weight: 700;
+}
+.nav-item > svg {
+  flex-shrink: 0;
+}
+.nav-item > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.welcome-card h2 {
+  overflow-wrap: anywhere;
 }
 .nav-item:not(:disabled):hover {
   background: var(--color-tint);
@@ -220,8 +232,35 @@ p {
 }
 .main-column {
   min-width: 0;
+  scroll-margin-top: 16px;
   border-left: 1px solid var(--color-border);
   border-right: 1px solid var(--color-border);
+}
+.session-notice,
+.recovery-state {
+  padding: 24px;
+  overflow-wrap: anywhere;
+}
+.session-notice {
+  background: var(--color-tint);
+  border-bottom: 1px solid var(--color-border);
+}
+.recovery-state > * + * {
+  margin-top: 16px;
+}
+.recovery-state .text-button {
+  margin-left: 12px;
+}
+button,
+input,
+textarea,
+select,
+a {
+  scroll-margin-block: 20px 88px;
+}
+.mobile-nav a[aria-current="page"] {
+  background: var(--color-tint);
+  box-shadow: inset 0 3px var(--color-primary);
 }
 .feed-header {
   display: flex;

@@ -81,8 +81,16 @@ function AccountPanel() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { user } = useSession();
+  const { user, expired } = useSession();
+  const ownProfile =
+    !!user &&
+    (pathname === `/u/${user.handle}` ||
+      pathname.startsWith(`/u/${user.handle}/`));
   const unread = useUnreadNotifications(user?.id);
+  const notificationLabel =
+    unread > 0
+      ? `${unread > 99 ? "99+" : unread} · Notifiche da leggere`
+      : "Notifiche";
   const bell = (
     <span className="notification-icon">
       <Icon name="bell" />
@@ -102,18 +110,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         Vai al contenuto
       </a>
       <aside className="left-column">
-        <Link href="/" className="brand" aria-label={`${productName}, home`}>
+        <Link href="/" className="brand" aria-labelledby="brand-name">
           <span className="brand-mark">
             <Icon name="leaf" size={29} />
           </span>
-          <span className="brand-name">
-            {productName}
-            <small>uno spazio per le tue idee</small>
+          <span className="brand-name" id="brand-name">
+            {productName} <small>uno spazio per le tue idee</small>
           </span>
         </Link>
         <nav aria-label="Navigazione principale" className="desktop-nav">
           <Link
             href="/"
+            aria-label="Home"
             className={`nav-item ${pathname === "/" ? "active" : ""}`}
             aria-current={pathname === "/" ? "page" : undefined}
           >
@@ -123,6 +131,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Link
             className={`nav-item ${pathname === "/search" ? "active" : ""}`}
             href="/search"
+            aria-label="Esplora"
             aria-current={pathname === "/search" ? "page" : undefined}
           >
             <Icon name="search" />
@@ -131,24 +140,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Link
             className={`nav-item ${pathname === "/notifications" ? "active" : ""}`}
             href="/notifications"
-            aria-label="Notifiche"
+            aria-label={notificationLabel}
             aria-current={pathname === "/notifications" ? "page" : undefined}
           >
-            {bell}
-            <span>Notifiche</span>
+            {bell} <span>Notifiche</span>
           </Link>
           <Link
             href="/people"
             className={`nav-item ${pathname === "/people" ? "active" : ""}`}
             aria-label="Persone"
+            aria-current={pathname === "/people" ? "page" : undefined}
           >
             <Icon name="search" />
             <span>Persone</span>
           </Link>
           <Link
-            className={`nav-item ${pathname.startsWith("/u/") ? "active" : ""}`}
+            className={`nav-item ${ownProfile ? "active" : ""}`}
             href={user ? `/u/${user.handle}` : "/login"}
             aria-label="Il tuo profilo"
+            aria-current={ownProfile ? "page" : undefined}
           >
             <Icon name="user" />
             <span>Profilo</span>
@@ -157,6 +167,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             className={`nav-item ${pathname.startsWith("/settings/") ? "active" : ""}`}
             href="/settings/profile"
             aria-label="Impostazioni profilo"
+            aria-current={
+              pathname.startsWith("/settings/") ? "page" : undefined
+            }
           >
             <Icon name="settings" />
             <span>Impostazioni</span>
@@ -172,7 +185,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           Fatto per conversare, con calma.
         </p>
       </aside>
-      <main id="main" className="main-column">
+      <main id="main" className="main-column" tabIndex={-1}>
+        {expired && (
+          <div className="session-notice" role="alert">
+            La sessione è scaduta o è stata revocata.{" "}
+            <Link className="text-button" href="/login">
+              Accedi di nuovo
+            </Link>{" "}
+            per continuare.
+          </div>
+        )}
         {children}
       </main>
       <aside className="right-column" aria-label="Informazioni sulla community">
@@ -201,47 +223,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </Link>
         </section>
         <section className="info-card">
-          <h2>Un passo alla volta</h2>
+          <h2>Fai spazio alle conversazioni</h2>
           <div className="milestone">
             <span className="milestone-number">01</span>
             <div>
-              <strong>Mettiamo radici</strong>
-              <p>Account e accesso · Completato</p>
+              <strong>Scegli chi ascoltare</strong>
+              <p>Segui le persone per ritrovarle nella tua home.</p>
             </div>
           </div>
           <div className="milestone">
             <span className="milestone-number">02</span>
             <div>
-              <strong>Incontriamoci</strong>
-              <p>Profili e connessioni · Completato</p>
+              <strong>Condividi un pensiero</strong>
+              <p>
+                Pubblica, rispondi e aggiungi una descrizione alle immagini.
+              </p>
             </div>
           </div>
           <div className="milestone">
             <span className="milestone-number">03</span>
             <div>
-              <strong>Inizia la conversazione</strong>
-              <p>Post e timeline reali · Completato</p>
-            </div>
-          </div>
-          <div className="milestone">
-            <span className="milestone-number">04</span>
-            <div>
-              <strong>Nuove prospettive</strong>
-              <p>Immagini, ricerca e notifiche · Completato</p>
-            </div>
-          </div>
-          <div className="milestone">
-            <span className="milestone-number">05</span>
-            <div>
-              <strong>Uno spazio più sicuro</strong>
-              <p>Moderazione e controllo dei dati · Completato</p>
-            </div>
-          </div>
-          <div className="milestone">
-            <span className="milestone-number current">06</span>
-            <div>
-              <strong>Una piccola community</strong>
-              <p>Beta locale su invito · Sprint attuale</p>
+              <strong>Prenditi cura del tuo spazio</strong>
+              <p>
+                Puoi bloccare, segnalare e gestire i tuoi dati dalle
+                impostazioni.
+              </p>
             </div>
           </div>
         </section>
@@ -268,17 +274,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </Link>
         <Link
           href="/notifications"
-          aria-label="Notifiche"
+          aria-label={notificationLabel}
           aria-current={pathname === "/notifications" ? "page" : undefined}
         >
           {bell}
         </Link>
-        <Link href="/settings/profile" aria-label="Impostazioni profilo">
+        <Link
+          href="/settings/profile"
+          aria-label="Impostazioni profilo"
+          aria-current={pathname.startsWith("/settings/") ? "page" : undefined}
+        >
           <Icon name="settings" />
         </Link>
         <Link
           href={user ? `/u/${user.handle}` : "/login"}
           aria-label={user ? "Il tuo profilo" : "Account"}
+          aria-current={ownProfile ? "page" : undefined}
         >
           <Icon name="user" />
         </Link>

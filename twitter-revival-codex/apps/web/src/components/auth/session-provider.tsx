@@ -14,6 +14,7 @@ type Session = {
   user: User | null;
   loading: boolean;
   error: string;
+  expired: boolean;
   setUser: (user: User | null) => void;
   refresh: () => Promise<void>;
   logout: () => Promise<void>;
@@ -24,6 +25,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [expired, setExpired] = useState(false);
+  const authenticated = useRef(false);
   const generation = useRef(0);
   const loadSession = useCallback((signal?: AbortSignal) => {
     const request = ++generation.current;
@@ -31,6 +34,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       .then((result) => {
         if (signal?.aborted || request !== generation.current) return;
         setUser(result.data.user);
+        authenticated.current = true;
+        setExpired(false);
         setError("");
       })
       .catch((err: unknown) => {
@@ -55,6 +60,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const controller = new AbortController();
     const expire = () => {
+      if (authenticated.current) setExpired(true);
+      authenticated.current = false;
       generation.current++;
       setUser(null);
       setError("");
@@ -71,6 +78,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     await api<void>("/auth/logout", { body: {} });
     generation.current++;
     setUser(null);
+    authenticated.current = false;
+    setExpired(false);
     setError("");
     setLoading(false);
   }
@@ -80,9 +89,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         user,
         loading,
         error,
+        expired,
         setUser: (value) => {
           generation.current++;
           setUser(value);
+          authenticated.current = !!value;
+          setExpired(false);
           setError("");
           setLoading(false);
         },

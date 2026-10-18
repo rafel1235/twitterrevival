@@ -51,7 +51,10 @@ test("@auth immagini S3, ricerca e notifiche persistenti con blocchi", async ({
   test.setTimeout(150000);
   const origin = baseURL!;
   const a = await register(context.request, origin, "media_a");
-  const other = await browser.newContext({ baseURL: origin });
+  const other = await browser.newContext({
+    baseURL: origin,
+    ignoreHTTPSErrors: origin === "https://localhost:3443",
+  });
   try {
     const b = await register(other.request, origin, "media_b");
     const term = `rugiada${Date.now().toString(36)}`;

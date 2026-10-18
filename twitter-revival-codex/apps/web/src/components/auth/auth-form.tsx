@@ -8,6 +8,7 @@ import { useSession } from "./session-provider";
 import { Icon } from "@/components/layout/icon";
 import { productName } from "@/components/layout/app-shell";
 import { useResource } from "@/lib/use-resource";
+import { useFormFocus } from "@/lib/use-form-focus";
 
 export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const register = mode === "register";
@@ -16,6 +17,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [fields, setFields] = useState<Record<string, string>>({});
+  const formRef = useFormFocus(pending, fields, error);
   const beta = useResource<{
     data: { invite_required: boolean; enrollment_open: boolean };
   }>("/beta");
@@ -132,7 +134,9 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           </div>
         ) : (
           <form
+            ref={formRef}
             onSubmit={submit}
+            aria-busy={pending}
             aria-label={register ? "Registrazione" : "Accesso"}
           >
             {register && (
@@ -150,10 +154,15 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
                       required
                       maxLength={43}
                       disabled={pending}
+                      aria-invalid={!!fields.invite_token}
+                      aria-describedby="invite-hint invite-error"
                     />
-                    <p className="field-hint">
+                    <p id="invite-hint" className="field-hint">
                       Il codice è monouso, legato alla tua email e ha una
                       scadenza.
+                    </p>
+                    <p id="invite-error" className="error-text">
+                      {fields.invite_token}
                     </p>
                   </div>
                 )}
@@ -212,7 +221,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
               </Link>
             )}
             {error && (
-              <div className="form-error" role="alert">
+              <div className="form-error" role="alert" tabIndex={-1}>
                 {error}
                 {fields.credentials && <p>{fields.credentials}</p>}
               </div>

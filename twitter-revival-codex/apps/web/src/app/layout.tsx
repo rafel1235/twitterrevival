@@ -6,7 +6,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: `${process.env.NEXT_PUBLIC_PRODUCT_NAME || "Radura"} · Uno spazio per le tue idee`,
   description:
-    "Un social indipendente. Anteprima di sviluppo con autenticazione reale e feed dimostrativo.",
+    "Radura, una beta privata su invito per condividere pensieri e conversazioni.",
   robots: { index: false, follow: false },
 };
 export default function RootLayout({

@@ -31,6 +31,15 @@ export function SessionGate({ children }: { children: React.ReactNode }) {
     );
   return children;
 }
+export function avatarInitials(name: string) {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((word) => Array.from(word)[0] || "")
+    .join("")
+    .toUpperCase();
+}
 export function UserAvatar({
   name,
   style = "sage",
@@ -42,13 +51,7 @@ export function UserAvatar({
   large?: boolean;
   small?: boolean;
 }) {
-  const initials = name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((word) => Array.from(word)[0] || "")
-    .join("")
-    .toUpperCase();
+  const initials = avatarInitials(name);
   const safe = ["sage", "peach", "lavender", "sky"].includes(style)
     ? style
     : "sage";
@@ -64,16 +67,23 @@ export function UserAvatar({
 export function PageError({
   message,
   retry,
+  pending = false,
+  stale = false,
 }: {
   message: string;
   retry?: () => void;
+  pending?: boolean;
+  stale?: boolean;
 }) {
   return (
     <div className={styles.state} role="alert">
       <p>{message}</p>
+      {stale && (
+        <p>Stai vedendo gli ultimi dati caricati. Riprova per aggiornarli.</p>
+      )}
       {retry && (
-        <button className="text-button" onClick={retry}>
-          Riprova
+        <button className="text-button" onClick={retry} disabled={pending}>
+          {pending ? "Caricamento…" : "Riprova"}
         </button>
       )}
     </div>

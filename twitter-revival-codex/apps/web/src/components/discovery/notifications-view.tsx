@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import {
   notificationsChanged,
   type NotificationPage,
@@ -11,6 +11,7 @@ import {
   SessionGate,
   PageError,
   UserAvatar,
+  avatarInitials,
 } from "@/components/profile/shared";
 import styles from "./discovery.module.css";
 const labels = {
@@ -38,8 +39,10 @@ function NotificationContent() {
   const [writing, setWriting] = useState("");
   const lifetime = useRef<AbortController | null>(null);
   const sequence = useRef(0);
+  const lastCursor = useRef("");
   const load = useCallback((cursor = "", signal = lifetime.current?.signal) => {
     const current = ++sequence.current;
+    lastCursor.current = cursor;
     return api<{ data: NotificationPage }>(
       `/notifications?limit=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
       { signal },
@@ -61,7 +64,8 @@ function NotificationContent() {
       })
       .catch((err: unknown) => {
         if (signal?.aborted || current !== sequence.current) return;
-        if (!cursor) setPage({ items: [], unread_count: 0 });
+        if (err instanceof ApiError && [401, 403, 404].includes(err.status))
+          setPage({ items: [], unread_count: 0 });
         setError(
           err instanceof Error ? err.message : "Caricamento non riuscito.",
         );
@@ -132,7 +136,17 @@ function NotificationContent() {
           Segna tutte come lette
         </button>
       </div>
-      {error && <PageError message={error} retry={() => void load()} />}
+      {error && (
+        <PageError
+          message={error}
+          pending={pending}
+          stale={page.items.length > 0}
+          retry={() => {
+            setPending(true);
+            void load(lastCursor.current);
+          }}
+        />
+      )}
       {pending && (
         <p className={styles.state} role="status">
           Caricamento notifiche…
@@ -157,7 +171,7 @@ function NotificationContent() {
           >
             <Link
               href={`/u/${item.actor.handle}`}
-              aria-label={`Profilo di @${item.actor.handle}`}
+              aria-label={`${avatarInitials(item.actor.display_name)}: profilo di @${item.actor.handle}`}
             >
               <UserAvatar
                 name={item.actor.display_name}

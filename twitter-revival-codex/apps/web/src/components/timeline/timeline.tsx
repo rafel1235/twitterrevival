@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSession } from "@/components/auth/session-provider";
 import { Icon } from "@/components/layout/icon";
 import { HomeTimeline } from "@/components/posts/home-timeline";
+import { PageError } from "@/components/profile/shared";
 
 const posts = [
   {
@@ -36,12 +37,21 @@ const posts = [
 ];
 
 export function Timeline() {
-  const { user, loading } = useSession();
-  if (loading)
+  const { user, loading, error, refresh } = useSession();
+  if (loading && !user)
     return (
       <p className="feed-end" role="status">
         Caricamento timeline…
       </p>
+    );
+  if (!user && error)
+    return (
+      <>
+        <header className="feed-header">
+          <h1>Home</h1>
+        </header>
+        <PageError message={error} retry={() => void refresh()} />
+      </>
     );
   return user ? <HomeTimeline key={user.id} /> : <DemoTimeline />;
 }

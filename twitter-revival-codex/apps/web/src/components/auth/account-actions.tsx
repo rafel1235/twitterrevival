@@ -6,6 +6,7 @@ import { api, ApiError } from "@/lib/api";
 import { useSession } from "./session-provider";
 import { Icon } from "@/components/layout/icon";
 import { LocalMailbox } from "@/components/profile/shared";
+import { useFormFocus } from "@/lib/use-form-focus";
 
 export function AccountAction({
   mode,
@@ -19,6 +20,7 @@ export function AccountAction({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [fields, setFields] = useState<Record<string, string>>({});
+  const formRef = useFormFocus(pending, fields, error);
   const title =
     mode === "forgot"
       ? "Ritrova il tuo account"
@@ -126,6 +128,8 @@ export function AccountAction({
           </div>
         ) : (
           <form
+            ref={formRef}
+            aria-busy={pending}
             onSubmit={submit}
             aria-label={
               mode === "forgot"
@@ -147,8 +151,15 @@ export function AccountAction({
                   autoComplete="email"
                   disabled={pending}
                   aria-invalid={!!fields.email}
+                  aria-describedby={
+                    fields.email ? "recovery-email-error" : undefined
+                  }
                 />
-                {fields.email && <p className="error-text">{fields.email}</p>}
+                {fields.email && (
+                  <p id="recovery-email-error" className="error-text">
+                    {fields.email}
+                  </p>
+                )}
               </div>
             )}
             {mode === "reset" && (
@@ -181,7 +192,7 @@ export function AccountAction({
               </>
             )}
             {error && (
-              <p role="alert" className="form-error">
+              <p role="alert" className="form-error" tabIndex={-1}>
                 {error}
               </p>
             )}

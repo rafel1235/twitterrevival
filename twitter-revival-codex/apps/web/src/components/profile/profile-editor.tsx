@@ -8,6 +8,7 @@ import { useSession } from "@/components/auth/session-provider";
 import { SessionGate, PageError, UserAvatar, LocalMailbox } from "./shared";
 import styles from "./profile.module.css";
 import { SettingsNav } from "@/components/safety/settings-nav";
+import { useFormFocus } from "@/lib/use-form-focus";
 
 export function ProfileEditor() {
   const { user } = useSession();
@@ -60,6 +61,7 @@ function Editor({ initial }: { initial: Profile }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [fields, setFields] = useState<Record<string, string>>({});
+  const formRef = useFormFocus(pending, fields, error);
   const [message, setMessage] = useState("");
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -109,6 +111,8 @@ function Editor({ initial }: { initial: Profile }) {
   return (
     <div className={styles.content}>
       <form
+        ref={formRef}
+        aria-busy={pending}
         onSubmit={submit}
         aria-label="Modifica profilo"
         className={styles.editForm}
@@ -123,7 +127,7 @@ function Editor({ initial }: { initial: Profile }) {
             Un avatar a iniziali, tutto tuo.
             <br />
             <span className="muted">
-              Le immagini arriveranno in uno sprint successivo.
+              Scegli le iniziali e il colore con cui farti riconoscere.
             </span>
           </p>
         </div>
@@ -193,10 +197,11 @@ function Editor({ initial }: { initial: Profile }) {
           </div>
         ))}
         <p className="field-hint">
-          Handle ed email restano invariati in questo sprint.
+          Da questa pagina puoi modificare il profilo; handle ed email non sono
+          modificabili.
         </p>
         {error && (
-          <p role="alert" className="form-error">
+          <p role="alert" className="form-error" tabIndex={-1}>
             {error}
           </p>
         )}

@@ -44,7 +44,10 @@ test("@auth profilo persistente, follow reciproci e blocco reale", async ({
   test.setTimeout(150000);
   const origin = baseURL!;
   const a = await register(context.request, origin, "graph_a");
-  const other = await browser.newContext({ baseURL: origin });
+  const other = await browser.newContext({
+    baseURL: origin,
+    ignoreHTTPSErrors: origin === "https://localhost:3443",
+  });
   try {
     const b = await register(other.request, origin, "graph_b");
     await page.goto("/settings/profile");
@@ -219,7 +222,10 @@ test("@auth verifica email e recupero password via SMTP reale", async ({
   test.setTimeout(150000);
   const origin = baseURL!;
   const a = await register(context.request, origin, "mail");
-  const oldSession = await browser.newContext({ baseURL: origin });
+  const oldSession = await browser.newContext({
+    baseURL: origin,
+    ignoreHTTPSErrors: origin === "https://localhost:3443",
+  });
   await oldSession.addCookies(await context.cookies());
   try {
     await page.goto(

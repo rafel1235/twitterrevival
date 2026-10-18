@@ -2,13 +2,14 @@ import { defineConfig, devices } from "@playwright/test";
 const external = process.env.PLAYWRIGHT_BASE_URL;
 export default defineConfig({
   testDir: "./apps/web/tests",
-  testIgnore: "**/https.spec.ts",
+  testIgnore: ["**/https.spec.ts", "**/api.spec.ts"],
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
     baseURL: external ?? "http://localhost:3000",
+    ignoreHTTPSErrors: external === "https://localhost:3443",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },

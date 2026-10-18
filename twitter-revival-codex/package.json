@@ -19,10 +19,14 @@
     "test:smoke": "playwright test",
     "test:e2e": "playwright test --grep @auth",
     "test:https": "playwright test -c playwright.https.config.ts",
+    "test:unit": "playwright test -c playwright.unit.config.ts",
+    "test:backend": "node scripts/test-backend.mjs",
+    "test:ux": "playwright test accessibility.spec.ts resilience.spec.ts",
     "test:load": "node scripts/load-test.mjs",
     "test:deployment": "node --test scripts/production-config.test.mjs scripts/production-compose.test.mjs"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@playwright/test": "^1.58.2",
     "prettier": "^3.8.1"
   }

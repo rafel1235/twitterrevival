@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import type { ConnectionPage } from "@/lib/profile";
 import { PageError, SessionGate, UserAvatar } from "./shared";
@@ -21,28 +21,41 @@ export function ConnectionList({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [pending, setPending] = useState("");
+  const sequence = useRef(0);
+  const lifetime = useRef<AbortController | null>(null);
+  const lastCursor = useRef<string | undefined>(undefined);
   const load = useCallback(
-    (cursor?: string, signal?: AbortSignal) =>
-      api<{ data: ConnectionPage }>(
+    (cursor?: string, signal = lifetime.current?.signal) => {
+      const request = ++sequence.current;
+      lastCursor.current = cursor;
+      return api<{ data: ConnectionPage }>(
         `${path}${path.includes("?") ? "&" : "?"}limit=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
         { signal },
       )
         .then((response) => {
+          if (signal?.aborted || request !== sequence.current) return;
           setPage((previous) =>
             cursor
               ? {
                   ...response.data,
-                  users: [...previous.users, ...response.data.users],
+                  users: [
+                    ...previous.users,
+                    ...response.data.users.filter(
+                      (person) =>
+                        !previous.users.some((old) => old.id === person.id),
+                    ),
+                  ],
                 }
               : response.data,
           );
           setError("");
         })
         .catch((err: unknown) => {
+          if (signal?.aborted || request !== sequence.current) return;
           if (
             !signal?.aborted &&
             err instanceof ApiError &&
-            [401, 404].includes(err.status)
+            [401, 403, 404].includes(err.status)
           )
             setPage({ users: [] });
           if (!signal?.aborted)
@@ -51,12 +64,15 @@ export function ConnectionList({
             );
         })
         .finally(() => {
-          if (!signal?.aborted) setLoading(false);
-        }),
+          if (!signal?.aborted && request === sequence.current)
+            setLoading(false);
+        });
+    },
     [path],
   );
   useEffect(() => {
     const controller = new AbortController();
+    lifetime.current = controller;
     void load(undefined, controller.signal);
     return () => controller.abort();
   }, [load]);
@@ -78,8 +94,19 @@ export function ConnectionList({
       aria-label={
         label || (blocked ? "Elenco utenti bloccati" : "Elenco connessioni")
       }
+      aria-busy={loading || !!pending}
     >
-      {error && <PageError message={error} retry={() => void load()} />}
+      {error && (
+        <PageError
+          message={error}
+          pending={loading || !!pending}
+          stale={page.users.length > 0}
+          retry={() => {
+            setLoading(true);
+            void load(lastCursor.current);
+          }}
+        />
+      )}
       <div aria-live="polite">
         {page.users.map((person) => (
           <div className={styles.personRow} key={person.id}>

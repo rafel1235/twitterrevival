@@ -80,8 +80,14 @@ test("@auth segnalazione, decisione moderatore, ripristino e audit reali", async
   test.setTimeout(180000);
   const origin = baseURL!;
   await register(context.request, origin, "report");
-  const author = await browser.newContext({ baseURL: origin });
-  const mod = await browser.newContext({ baseURL: origin });
+  const author = await browser.newContext({
+    baseURL: origin,
+    ignoreHTTPSErrors: origin === "https://localhost:3443",
+  });
+  const mod = await browser.newContext({
+    baseURL: origin,
+    ignoreHTTPSErrors: origin === "https://localhost:3443",
+  });
   let moderatorHandle = "";
   try {
     await register(author.request, origin, "author");

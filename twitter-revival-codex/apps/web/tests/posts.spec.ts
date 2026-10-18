@@ -65,7 +65,10 @@ test("@auth post persistenti, feed, risposte, like, repost, citazioni e blocchi"
   test.setTimeout(150000);
   const origin = baseURL!;
   const a = await register(context.request, origin, "words_a");
-  const other = await browser.newContext({ baseURL: origin });
+  const other = await browser.newContext({
+    baseURL: origin,
+    ignoreHTTPSErrors: origin === "https://localhost:3443",
+  });
   try {
     const b = await register(other.request, origin, "words_b");
     const outside = await create(
@@ -123,30 +126,34 @@ test("@auth post persistenti, feed, risposte, like, repost, citazioni e blocchi"
     const otherCard = page.getByTestId(`post-${outside.id}`).first();
     await expect(otherCard).toBeVisible();
     await otherCard
-      .getByRole("button", { name: "Mi piace", exact: true })
+      .getByRole("button", { name: /^Mi piace, \d+ mi piace$/ })
       .click();
     await expect(
-      otherCard.getByRole("button", { name: "Rimuovi mi piace", exact: true }),
+      otherCard.getByRole("button", {
+        name: /^Rimuovi mi piace, \d+ mi piace$/,
+      }),
     ).toHaveAttribute("aria-pressed", "true");
     await page.reload();
     await expect(
-      otherCard.getByRole("button", { name: "Rimuovi mi piace", exact: true }),
+      otherCard.getByRole("button", {
+        name: /^Rimuovi mi piace, \d+ mi piace$/,
+      }),
     ).toBeVisible();
     await otherCard
-      .getByRole("button", { name: "Ripubblica", exact: true })
+      .getByRole("button", { name: /^Ripubblica, \d+ repost$/ })
       .click();
     await expect(
       page.getByText(`Ripubblicato da @${a.handle}`, { exact: true }),
     ).toBeVisible();
     await otherCard
-      .getByRole("button", { name: "Annulla repost", exact: true })
+      .getByRole("button", { name: /^Annulla repost, \d+ repost$/ })
       .click();
     await expect(
       page.getByText(`Ripubblicato da @${a.handle}`, { exact: true }),
     ).toHaveCount(0);
     await page.goto(`/posts/${outside.id}`);
     const root = page.getByTestId(`post-${outside.id}`);
-    await root.getByRole("button", { name: "Cita", exact: true }).click();
+    await root.getByRole("button", { name: /^Cita, \d+ citazioni$/ }).click();
     const citing = root.getByRole("form", { name: "Citazione", exact: true });
     await citing
       .getByRole("textbox")
@@ -181,7 +188,7 @@ test("@auth post persistenti, feed, risposte, like, repost, citazioni e blocchi"
     await expect(
       page.getByRole("link", {
         name: `Citazione di @${b.handle}`,
-        exact: true,
+        exact: false,
       }),
     ).toContainText(outside.body);
     if (testInfo.project.name === "desktop") {

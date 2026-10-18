@@ -1,8 +1,17 @@
-# Radura · Sprint 6 — beta locale a inviti
+# Radura · Sprint 7 — usabilità, accessibilità e affidabilità
 
-**Dominio e server:** predisposti i file separati per un VPS e HTTPS pubblico, con riferimento al dominio scelto `raduraapp.it`. Acquisto, DNS e deploy ancora da eseguire; l’ambiente locale resta invariato. Vedi [proposta, costi e procedura server](docs/operations/domain-server.md). Verifica dei nuovi file: `npm run test:deployment`. Il Compose server parte in manutenzione fino alla preparazione della beta remota.
+**Dominio e hosting rimandati**, per scelta dell’utente. Lo Sprint 7 consolida la beta locale. I file già predisposti per VPS/HTTPS pubblico sono conservati come riferimento in [dominio e server](docs/operations/domain-server.md); nessun acquisto o deploy, nessuna migrazione verso Vercel/Render/Supabase.
 
 Social indipendente, nome interno **Twitter Revival**. Brand, testi, icone SVG e illustrazioni CSS originali. Nessuna affiliazione con Twitter/X, nessuno scraping o asset proprietario. Account, profili, follow, blocchi, post e interazioni sono reali e persistenti. La home autenticata mostra il feed cronologico dei seguiti e i propri post. Senza accesso compare solo un'anteprima esplicitamente **Demo**.
+
+## Miglioramenti dello Sprint 7
+
+- Navigazione nominata anche su tablet, salto al contenuto con focus, pagina corrente indicata su desktop/mobile, contrasto dei testi secondari migliorato. Azioni dei post leggibili con conteggi e iniziali degli avatar.
+- Accesso, recupero password e modifica profilo portano il focus al primo campo errato o al messaggio generale, conservando i valori del form.
+- Attesa API limitata a 15 secondi per letture, 30 per scritture/upload, 60 per export. Nessun retry automatico delle scritture: dopo un’interruzione verificare l’esito prima di riprovare. La bozza del composer resta nel form durante un errore recuperabile; non viene salvata nel browser e non sopravvive a navigazione/ricaricamento.
+- Feed/notifiche mantengono gli ultimi dati caricati in caso di errore transitorio e lo indicano; il retry di paginazione usa il cursore fallito. Una risposta 401/403/404 rimuove i dati interessati. La sessione scaduta/revocata produce un avviso e richiede nuovo accesso.
+- Aggiornamenti concorrenti delle risorse annullati/ignorati quando superati, errore di sessione distinto dalla demo anonima, recupero degli errori di rendering della singola pagina.
+- Test client API, axe e Playwright; runner backend con DB/S3 effimeri separati. [Ambito e criteri](docs/architecture/sprint-7.md), [verifiche e limiti](docs/implementation-status.md).
 
 ## Avvio della beta locale con HTTPS
 
@@ -335,6 +344,7 @@ Restano le quote per peer e i controlli Origin/CSRF degli sprint precedenti. In 
 npm run format:check
 npm run lint
 npm run typecheck
+npm run test:unit
 npm run build
 cd services/api
 gofmt -l cmd internal migrations
@@ -345,6 +355,21 @@ go build ./cmd/server
 
 Con PostgreSQL dedicato, esportare `TEST_DATABASE_URL` prima di `go test`: i test reali creano uno schema isolato e lo eliminano alla fine; **non** usare un database di produzione. Richiedono permessi `CREATE SCHEMA` e `CREATE EXTENSION citext`. Senza variabile il test di integrazione è esplicitamente saltato. Il ciclo include hash password/token, case-insensitive conflict, sessione dopo nuova istanza, scadenza, sospensione, logout, constraint, atomicità e rollback/up delle migrazioni.
 
+In alternativa, dalla root del progetto con Node e Docker avviato, `npm run test:backend` esegue gofmt/vet/test/build in un progetto Docker casuale: PostgreSQL e S3 effimeri su reti proprie, nessuna porta host, password esclusivamente di test e sorgente Go in sola lettura. Il runner valida topologia/mount prima dell’avvio e rimuove soltanto le risorse del proprio progetto. Cache Go e report JSON restano in `.local`; `.env` e volumi della beta non vengono montati. La prima esecuzione può scaricare immagini/moduli. Il race detector rimane nella CI Linux.
+
+Per i soli test dello Sprint 7 sulla beta HTTPS già avviata:
+
+```powershell
+$env:PLAYWRIGHT_BASE_URL='https://localhost:3443'
+$env:E2E_AUTH='1'
+npm run test:unit
+npm run test:ux
+```
+
+`test:unit` usa il runner Playwright in Node senza browser né backend, con fetch di test. `test:ux` comprende audit axe, tastiera, 320 px e testo al 200%, validazioni e recupero dopo guasti. Gli account di collaudo sono sintetici, esclusi dalle metriche pilota e cancellati dalle fixture. Gli errori di rete, HTTP e payload sono iniettati soltanto nel browser; la paginazione di un test usa un cursore sintetico e post realmente letti dal database. Queste prove non certificano conformità WCAG e non sostituiscono un collaudo umano con screen reader.
+
+Per tutta la regressione locale usare `E2E_AUTH=1`, `E2E_MAILPIT=1` e `npm run test:smoke` con la stessa base HTTPS. L’eccezione TLS dei contesti Chromium è limitata a `https://localhost:3443`; `npm run test:https` verifica separatamente catena CA, hostname e cookie Secure. Nessuna fiducia globale installata nel sistema.
+
 Playwright avvia `npm run start`, quindi serve prima `npm run build`. Gli helper auth rispettano eventuali 429 attendendo il `Retry-After` del server: i limiti rimangono attivi anche nei test. La suite può quindi richiedere oltre un minuto. Con API e database attivi:
 
 ```sh
@@ -354,7 +379,7 @@ E2E_AUTH=1 E2E_MAILPIT=1 npm run test:smoke
 
 PowerShell: `$env:E2E_AUTH='1'; $env:E2E_MAILPIT='1'; npm run test:smoke`. Per verificare lo stack Compose già avviato impostare anche `$env:PLAYWRIGHT_BASE_URL='http://localhost:3000'` (disabilita il webServer automatico). `E2E_AUTH` abilita i cicli reali auth/social; `E2E_MAILPIT` abilita il ciclo verifica/reset tramite SMTP reale. Senza le rispettive variabili i test dipendenti sono esplicitamente saltati. `MAILPIT_URL` può cambiare l’URL della casella per i test (default http://localhost:8025).
 
-Screenshot a 1440×900, 768×1024, 390×844 in `test-results/`; report con `npx playwright show-report`. La suite mantiene auth, profili/avatar, follow/blocchi e SMTP dello Sprint 2. Aggiunge pubblicazione con 280 emoji (281 rifiutate), modifica e cancellazione proprie, testo HTML innocuo, like/repost, risposta/citazione, oscuramento dopo blocco e persistenza dopo refresh. La paginazione oltre 20 eventi viene verificata anche nella viewport desktop. Nessun mock/intercettazione delle API nei test browser. I test Go aggiungono vincoli SQL, cursori a timestamp uguali, inserimenti fra pagine, account sospesi e scritture concorrenti con blocco/cancellazione.
+Screenshot a 1440×900, 768×1024, 390×844 in `test-results/`; report con `npx playwright show-report`. La suite mantiene auth, profili/avatar, follow/blocchi e SMTP dello Sprint 2. Aggiunge pubblicazione con 280 emoji (281 rifiutate), modifica e cancellazione proprie, testo HTML innocuo, like/repost, risposta/citazione, oscuramento dopo blocco e persistenza dopo refresh. La paginazione oltre 20 eventi viene verificata anche nella viewport desktop. I percorsi funzionali usano API/DB/S3 reali; soltanto i test di recupero dello Sprint 7 iniettano guasti espliciti. I test Go aggiungono vincoli SQL, cursori a timestamp uguali, inserimenti fra pagine, account sospesi e scritture concorrenti con blocco/cancellazione.
 
 La CI GitHub Actions avvia PostgreSQL e Mailpit, esegue format/lint/tipi/build, Go vet/test con race detector e il ciclo Playwright completo. `.github/workflows/ci.yml` serve per pubblicare questa directory come repository autonomo; `../.github/workflows/radura-ci.yml` è il workflow nella root Git effettiva della cartella contenitore `twitter revival`, con working-directory e cache configurate per il progetto annidato. L’esecuzione remota richiede pubblicare il repository e non viene dichiarata verificata localmente.
 
@@ -416,4 +441,4 @@ scripts/start-local-beta.ps1      avvio HTTPS e monitoraggio locale
 scripts/load-test.mjs             carico sintetico e cleanup tramite API
 ```
 
-Esiti e file dello Sprint 6 nel [registro](docs/implementation-status.md), protocollo beta nell’[architettura](docs/architecture/sprint-6.md), comandi HTTPS/monitoraggio/carico nella [procedura locale](docs/operations/local-beta.md). Restano da svolgere reclutamento dei piloti e osservazione reale D7; l’installazione rimane locale.
+Esiti attuali nel [registro Sprint 7](docs/implementation-status.md); [registro Sprint 6](docs/implementation-status-sprint-6.md) e [preparazione hosting rimandata](docs/implementation-status-deployment-preparation.md) conservati. Protocollo beta nell’[architettura](docs/architecture/sprint-6.md), comandi HTTPS/monitoraggio/carico nella [procedura locale](docs/operations/local-beta.md). Restano da svolgere reclutamento dei piloti e osservazione reale D7; l’installazione rimane locale.

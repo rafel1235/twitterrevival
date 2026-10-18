@@ -1,67 +1,72 @@
-# Stato implementazione — preparazione dominio e server
+# Stato implementazione — Sprint 7
 
-Data: **18 ottobre 2026**. Prodotto **Radura**. L’utente ha richiesto dominio e server prima dello Sprint 7; non possiede ancora né dominio né VPS. Budget indicativo **10–20 €/mese**, beta privata a inviti. Dominio scelto: **raduraapp.it**.
+Data: **18 ottobre 2026**. Prodotto **Radura**. Ambito scelto dall’utente: **usabilità, accessibilità e affidabilità della beta locale**. La roadmap originale termina allo Sprint 6; questo incremento è definito in [sprint-7.md](architecture/sprint-7.md).
 
-**Stato: preparazione locale completata e verificata; acquisto, DNS e deploy remoto da eseguire.** Il sito locale dello Sprint 6 rimane separato. Nessun account esterno creato, servizio pagato, record DNS modificato, accesso SSH o invio email a terzi. Nessuna funzione Sprint 7 introdotta.
+**Dominio e hosting rimandati.** Nessun acquisto, account cloud, DNS, deploy o migrazione verso Vercel/Render/Supabase. Preparazione precedente conservata in [implementation-status-deployment-preparation.md](implementation-status-deployment-preparation.md); Sprint 6 in [implementation-status-sprint-6.md](implementation-status-sprint-6.md).
 
 ## Stato iniziale e conservazione
 
-Letti AGENTS.md e PROJECT_SPEC.md. Repository inizialmente pulito su `main`, commit `e9d5684 sprint6`. Nessun commit/push/reset/cambio ramo; specifiche conservate. `.env`, segreti e volumi locali non modificati. Registro completo Sprint 6 archiviato in [implementation-status-sprint-6.md](implementation-status-sprint-6.md).
+Letti AGENTS.md e PROJECT_SPEC.md, repository pulito su `main`, commit `7c8df05 sprint6 fix`. Nessun commit/push/reset/cambio ramo; specifiche e configurazione privata conservate. Nessuna migrazione SQL e nessun endpoint nuovo. Aggiornato soltanto il frontend del progetto locale; API, database, storage, casella e CA non ricreati.
 
-## Scelte e verifiche del dominio
+## Attività implementate
 
-- Nome visibile Radura, dominio scelto esplicitamente `raduraapp.it`.
-- WHOIS ufficiale Registro .it: radura.it registrato (`ok`), raduraapp.it e radurasocial.it `AVAILABLE` al controllo. RDAP ufficiale Verisign: radura.com e radura.net registrati. Estratti soltanto nome/stato, nessun dato del titolare conservato.
-- Proposta VPS: OVHcloud VPS-2, datacenter UE standard, 4 vCore/8 GB/75 GB, Ubuntu 24.04 LTS x86-64. Listino da 8,80 €/mese IVA inclusa; .it 3,65 € primo anno e 10,97 €/anno al rinnovo. Prezzi e disponibilità da riconfermare nel carrello, nessun ordine avviato.
-- Dettagli, fonti ufficiali, opzioni di acquisto e procedura in [domain-server.md](operations/domain-server.md).
+- Nomi accessibili della navigazione tablet, label del brand coerente con il testo, contrasto dei testi secondari, pagina corrente desktop/mobile e skip link con focus reale nel main. Testo ingrandito al 200% senza tagli nel brand, nelle voci di navigazione e nel titolo laterale.
+- Conteggi nei nomi delle azioni dei post, iniziali nei link avatar, riferimenti alle citazioni con nome derivato dal contenuto. Suggerimenti d’uso al posto delle milestone tecniche nell’interfaccia.
+- Focus sul primo campo errato o sull’errore generale in accesso/registrazione, recupero password e modifica profilo. Errori collegati ai campi; stato di invio annunciato; valori conservati.
+- API client con timeout letture 15s, mutazioni/upload 30s, export 60s, esteso al corpo della risposta; cancellazione distinta dal guasto di rete e parsing difensivo degli errori. Nessun retry automatico delle scritture; messaggio esplicito sull’esito incerto.
+- Feed/notifiche conservati durante guasti transitori con avviso sugli ultimi dati; retry con il cursore fallito. 401/403/404 rimuovono i dati interessati. Liste connessioni con deduplica e protezione dalle risposte obsolete.
+- Risorse annullate/superate durante aggiornamenti concorrenti; errore di verifica sessione distinto dalla demo anonima; avviso di sessione scaduta/revocata con link di accesso.
+- Boundary per errori di rendering della singola pagina e recupero, shell preservata.
+- Test unitari del client API e test Playwright con axe, tastiera, reflow 320px, testo 200%, errori e dati reali. Contesti dei test precedenti adattati all’HTTPS locale; verifica CA separata.
+- Runner `npm run test:backend`: DB/S3 effimeri, password di test, nessuna porta host, progetto casuale, validazione topologia e cleanup delle sole risorse proprie.
+- CI aggiornata con test unitari; la suite browser completa include automaticamente i nuovi test. Nessuna pipeline di deploy.
 
-## File creati e attività completate
+## File principali
 
 ```text
-compose.production.yaml
-.env.production.example
-.gitattributes
-infra/Caddyfile.production
-scripts/production-config.mjs
-scripts/production-config.test.mjs
-scripts/production-compose.test.mjs
-scripts/start-production.sh
-docs/operations/domain-server.md
-docs/implementation-status-sprint-6.md
+apps/web/src/lib/{api,use-resource,use-form-focus}.ts
+apps/web/src/app/{error.tsx,layout.tsx,globals.css,theme.css}
+apps/web/src/components/{auth,layout,posts,profile,discovery,timeline}/
+apps/web/tests/{api,accessibility,resilience}.spec.ts
+apps/web/tests/ux-fixtures.ts
+playwright.unit.config.ts
+infra/backend-tests.compose.yaml
+scripts/test-backend.mjs
+docs/architecture/sprint-7.md
+docs/reverse-engineering/sprint-7-matrix.md
+docs/security/sprint-7-review.md
 ```
 
-Aggiornati README, ignore Git/Docker, package scripts, workflow CI interno e nella root Git effettiva. Nessuna nuova dipendenza npm/Go, nessuna modifica al codice applicativo.
+Aggiornati inoltre README, package/lockfile, configurazione Playwright, test precedenti e workflow interno/root Git. Nuova dipendenza di sviluppo: `@axe-core/playwright` **4.14.0**; nessuna nuova dipendenza di produzione.
 
-- Compose server autonomo, progetto/volumi `radura-production` separati; non eredita porte o Mailpit dallo sviluppo. Solo 80/443 pubbliche; monitor su loopback; DB/storage/API/frontend senza porte host.
-- Caddy con ACME pubblico, volume certificati persistente, metriche/health interne nascoste, intestazioni e noindex per beta. `PUBLIC_BETA_ENABLED=false` restituisce vera manutenzione 503; health container 200.
-- Modalità `start-production.sh --domain-only`: valida dominio/contatto e beta chiusa, avvia soltanto il gateway senza dipendenze. Consente dominio/HTTPS prima di SMTP e apertura applicativa. Non eseguita sul server, che non esiste ancora.
-- Modalità completa: Origin HTTPS esatto, cookie Secure, inviti obbligatori, SMTP STARTTLS; credenziali email locali escluse, casella Mailpit assente dal build server.
-- Init CSPRNG per segreti distinti, `.env.production` privata e mai sovrascritta. Parser senza eval/source, validazione placeholder/DSN/relay, secret monitor leggibile da Prometheus non root ma protetto dalla directory privata host.
-- Limiti memoria, rotazione log, healthcheck; script con progetto esplicito e ambiente server autorevole. Nessun deploy automatico, migrazione dei contenuti locali o servizio a pagamento attivato.
-- File shell con checkout LF; segreti `.env*` e cache TypeScript esclusi anche dal contesto Docker.
+## Verifiche effettive
 
-## Esiti effettivi
+| Controllo                                 | Esito                                                                                                                                      |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Test client API in Node                   | **10/10 passati**: timeout, abort, corpo incompleto, JSON/HTML errati, cookie/CSRF, upload/blob, nessun retry                              |
+| Backend isolato Linux                     | **45 test + 31 sottocasi passati**, nessun test saltato, gofmt/vet/build passati; progetto `radura-backend-check-3bed26d4` rimosso         |
+| Lint / TypeScript                         | Passati                                                                                                                                    |
+| Build Next di produzione in Docker        | Passata anche dopo l’ultima correzione CSS; frontend locale aggiornato e sano                                                              |
+| Regressione browser completa              | **84/84 passati**, zero saltati o flaky, 4m26s; HTTPS locale, desktop/tablet/mobile, prima dell’ultima correzione CSS                      |
+| Accessibilità sulla correzione CSS finale | **18/18 passati**, zero saltati, circa 1,3 minuti; axe, focus, contenitori del testo al 200% e reflow 320px; screenshot ispezionati        |
+| Configurazione deployment conservata      | **9/9 passati**, parser/configurazione, sintassi Bash e gateway isolato: manutenzione 503, metriche 404, salute 200                        |
+| HTTPS sulla build finale                  | **3/3 passati**, 8,9s; CA verificata, redirect, cookie Secure/HttpOnly, persistenza, Origin ostile respinto                                |
+| Formattazione finale                      | `npm run format:check`, workflow nella root Git e `git diff --check` passati                                                               |
+| Audit produzione                          | **0 vulnerabilità note**                                                                                                                   |
+| Audit completo                            | Cinque segnalazioni high nella catena dev braces/ESLint, senza versione corretta indicata; [dettagli e fonte](security/sprint-7-review.md) |
 
-| Verifica eseguita                                       | Risultato                                                                                                                                                 |
-| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run test:deployment`                               | **9/9 passati**, nessuno saltato                                                                                                                          |
-| Configurazione/credenziali su filesystem Linux effimero | **4/4 passati**, compresi permessi 600 e init senza sovrascrittura                                                                                        |
-| Compose server                                          | Topologia e porte verificate tramite configurazione JSON, senza stampare segreti reali                                                                    |
-| Avvio gateway con Compose                               | Riuscito in progetto `radura-domain-check-*` isolato, rete interna e nessuna porta host; unico container gateway sano; risorse proprie rimosse al termine |
-| Caddy                                                   | Adapt entrambi gli stati senza rete/ACME; HTTP 503 manutenzione e 404 metriche verificati realmente in container offline                                  |
-| Script server                                           | Sintassi Bash verificata in Linux; preflight dominio chiuso e config completa verificati                                                                  |
-| Build Next per server                                   | **Passata**, immagine separata `radura-web:deployment-check`, `NEXT_PUBLIC_DEV_MAILBOX_URL` vuoto; nessuna sostituzione del container locale              |
-| Format e diff                                           | Prettier e controllo whitespace passati, compresa la documentazione finale                                                                                |
+Durante lo sviluppo, il primo controllo UX ha segnalato sei errori nelle etichette accessibili, poi corretti. Una regressione successiva ha rilevato il conteggio notifiche assente dal nome accessibile e una collisione degli artefatti di test: il runner unitario cancellava la directory usata contemporaneamente dalle trace browser. Conteggio corretto e directory unit/HTTPS separate; l’esecuzione completa successiva ha passato tutti gli 84 casi. L’ispezione visiva al 200% ha inoltre individuato testo tagliato che il solo controllo di overflow della pagina non rilevava: aggiunto un controllo dei singoli contenitori, verificato fallire sulla versione precedente e corretto il wrapping CSS.
 
-I test temporanei usano soltanto valori sintetici e directory `.local` proprie, senza accedere ai dati applicativi esistenti. Nessun certificato pubblico richiesto: il test gateway usa HTTP su loopback nel container e non espone porte dell’host. L’avvio effettivo dello script remoto, il firewall VPS e HTTPS pubblico non sono ancora verificabili senza acquisto e accesso al server.
+Il primo comando backend non ha letto le variabili contenenti cifre e non ha passato il segreto S3: nove integrazioni media fallite per configurazione. La ripetizione sui servizi correnti è stata respinta dalla revisione automatica per il rischio dei test purge/orfani. È stato quindi creato e verificato il runner con DB/S3 completamente separati; il suo risultato completo è quello riportato sopra. Nessuna pulizia manuale dei dati correnti eseguita in questo sprint.
 
-Non ripetute le suite Go e browser dello Sprint 6 perché il codice applicativo è invariato. Gli esiti storici (45 Go + 31 sottocasi, race Linux, 42 browser HTTP + 3 HTTPS, carico e restore) restano nel registro archiviato e non sono presentati come nuove esecuzioni. CI aggiornata, nessuna pipeline remota eseguita.
+Artefatti privati, ignorati da Git: `.local/backend-tests/radura-backend-check-3bed26d4/go-test.jsonl`, `.local/playwright-sprint7-results.json`, audit npm, controlli e screenshot finali in `.local/sprint7-final-accessibility` e `.local/test-results-https`; report HTML in `playwright-report`/`playwright-report-https` e screenshot della regressione completa in `test-results`. Gli account di collaudo dei nuovi test sono sintetici e le fixture ne richiedono la cancellazione anche dopo un errore. I test di recupero iniettano guasti nel solo browser; i contenuti ordinari provengono da API/DB/S3 reali. Nessuna statistica di piloti umani inventata.
 
-## Attività ancora necessarie
+## Limiti e prossimo passo
 
-1. Acquistare dominio e VPS nel proprio account, dopo verifica del carrello e del costo mensile; fornire l’IP pubblico e rendere disponibile l’accesso SSH autorizzato senza inviare chiavi private in chat.
-2. Configurare OS/Docker/SSH/firewall, trasferire soltanto il sorgente, impostare il record A e avviare la modalità solo dominio. Verificare il certificato reale senza eccezioni TLS.
-3. Prima di aprire l’app ai piloti: relay/mittente e consegna email verificati, testi/informativa/contatti aggiornati per l’installazione remota, account moderatore, backup applicativo DB+S3 e restore Linux con copia fuori VPS. Il backup giornaliero della VM non sostituisce la prova applicativa.
-4. Aprire la beta soltanto dopo le verifiche e l’autorizzazione del gestore. Rimangono i limiti documentati dello Sprint 6: quote peer condivise dietro Next, singolo server senza alta disponibilità e nessuna osservazione D7 reale ancora disponibile.
+- Nessuna certificazione WCAG: axe e prove tastiera coprono gli stati elencati nella matrice; collaudo umano con screen reader ancora da svolgere.
+- La bozza resta nel componente durante errori recuperabili; navigazione, reload, perdita sessione o errore di rendering possono perderla. Nessun salvataggio privato nel browser.
+- Timeout/cancellazione non dimostrano che una mutazione non sia stata applicata: verificare l’esito prima di reinviarla.
+- Race detector, carico e backup/restore degli sprint precedenti non rieseguiti qui; codice/schema/backend invariati. Race nella CI Linux, esecuzione remota CI non dichiarata verificata.
+- Beta ancora locale, senza piloti esterni o osservazione D7 reale. Hosting e dominio restano rinviati; nessuna dipendenza da acquisti per usare questo sprint.
 
-La configurazione locale continua a usare `scripts/start-local-beta.ps1`; i comandi server sono esplicitamente separati e documentati. Nessun acquisto o deploy è stato simulato o dichiarato completato.
+Avvio: dalla root applicativa `./scripts/start-local-beta.ps1`; per ricompilare `./scripts/start-local-beta.ps1 -Build`. Stato finale: **7/7 servizi Docker sani**. Sito **https://localhost:3443**, Mailpit **http://localhost:8025**, monitor **http://localhost:9090**. Prossimo passo: collaudo manuale dei percorsi con tastiera e screen reader, poi definire l’incremento successivo con l’utente.

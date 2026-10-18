@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { postsChanged, type Post, type PostPreview } from "@/lib/posts";
-import { UserAvatar } from "@/components/profile/shared";
+import { UserAvatar, avatarInitials } from "@/components/profile/shared";
 import { Icon } from "@/components/layout/icon";
 import { PostComposer } from "./composer";
 import { Attachments } from "./attachments";
@@ -25,10 +25,9 @@ export function Reference({
     <Link
       className={kind === "quote" ? styles.quote : styles.parent}
       href={`/posts/${post.id}`}
-      aria-label={`${kind === "quote" ? "Citazione" : "Post originale"} di @${post.author.handle}`}
     >
       <span className={styles.context}>
-        {kind === "reply" ? "In risposta a " : ""}
+        {kind === "reply" ? "In risposta a " : "Citazione di "}
         <strong>@{post.author.handle}</strong>
       </span>
       <p className="post-text">{post.body}</p>
@@ -89,7 +88,7 @@ export function PostCard({
     >
       <Link
         href={`/u/${post.author.handle}`}
-        aria-label={`Profilo di @${post.author.handle}`}
+        aria-label={`${avatarInitials(post.author.display_name)}: profilo di @${post.author.handle}`}
       >
         <UserAvatar
           name={post.author.display_name}
@@ -142,7 +141,7 @@ export function PostCard({
           </Link>
           <button
             disabled={pending}
-            aria-label={post.reposted ? "Annulla repost" : "Ripubblica"}
+            aria-label={`${post.reposted ? "Annulla repost" : "Ripubblica"}, ${post.reposts_count} repost`}
             aria-pressed={post.reposted}
             onClick={() => void mutate("reposts")}
           >
@@ -151,7 +150,7 @@ export function PostCard({
           </button>
           <button
             disabled={pending}
-            aria-label={post.liked ? "Rimuovi mi piace" : "Mi piace"}
+            aria-label={`${post.liked ? "Rimuovi mi piace" : "Mi piace"}, ${post.likes_count} mi piace`}
             aria-pressed={post.liked}
             onClick={() => void mutate("likes")}
           >
@@ -160,7 +159,7 @@ export function PostCard({
           </button>
           <button
             disabled={pending}
-            aria-label="Cita"
+            aria-label={`Cita, ${post.quotes_count} citazioni`}
             onClick={() => setMode(mode === "quote" ? null : "quote")}
           >
             <Icon name="share" size={18} />

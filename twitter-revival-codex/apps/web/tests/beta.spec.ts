@@ -33,7 +33,10 @@ test("@auth beta privata: invito dal pannello, frammento rimosso, registrazione 
       "Verifica E2E locale del pannello beta con account sintetico.",
     ]);
   role("moderator");
-  const pilot = await browser.newContext({ baseURL: origin });
+  const pilot = await browser.newContext({
+    baseURL: origin,
+    ignoreHTTPSErrors: origin === "https://localhost:3443",
+  });
   let created = false;
   let paused = false;
   let initialCapacity = 50;

@@ -5,6 +5,7 @@ if (baseURL !== "https://localhost:3443")
 export default defineConfig({
   testDir: "./apps/web/tests",
   testMatch: "**/https.spec.ts",
+  outputDir: ".local/test-results-https",
   workers: 1,
   retries: 0,
   reporter: [
