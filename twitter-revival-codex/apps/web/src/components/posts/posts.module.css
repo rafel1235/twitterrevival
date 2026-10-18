@@ -4,6 +4,83 @@
   color: var(--color-muted);
   font-size: 14px;
 }
+.drafts {
+  border-top: 1px solid var(--color-border);
+  margin-top: 16px;
+  padding-top: 12px;
+}
+.drafts h3 {
+  font-size: 13px;
+  margin: 0;
+}
+.draftRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.draftRow span {
+  flex-basis: 100%;
+}
+.draftRow button {
+  margin-top: 0;
+}
+.images {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.images:empty {
+  display: none;
+}
+.images a {
+  display: block;
+  min-width: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+}
+.images img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 440px;
+  object-fit: contain;
+  background: var(--color-tint);
+}
+.uploadPreview {
+  max-width: 300px;
+  margin: 10px 0;
+  overflow-wrap: anywhere;
+}
+.uploadBox {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: #f8faf7;
+}
+.uploadBox label {
+  display: block;
+  margin: 10px 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.uploadBox input {
+  max-width: 100%;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: white;
+}
+.uploadBox button {
+  margin-top: 12px;
+}
 .composer {
   border-bottom: 1px solid var(--color-border);
 }

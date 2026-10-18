@@ -36,16 +36,42 @@ type Like struct {
 	CreatedAt pgtype.Timestamptz
 }
 
-type Post struct {
+type Medium struct {
 	ID         string
-	AuthorID   string
-	Body       string
-	ReplyToID  pgtype.UUID
-	QuoteOfID  pgtype.UUID
-	Visibility string
+	OwnerID    string
+	StorageKey string
+	MimeType   string
+	Bytes      int64
+	Width      int32
+	Height     int32
+	AltText    string
 	CreatedAt  pgtype.Timestamptz
-	UpdatedAt  pgtype.Timestamptz
 	DeletedAt  pgtype.Timestamptz
+}
+
+type Notification struct {
+	ID           string
+	RecipientID  string
+	ActorID      string
+	Type         string
+	SubjectID    string
+	PostID       pgtype.UUID
+	TargetPostID pgtype.UUID
+	CreatedAt    pgtype.Timestamptz
+	ReadAt       pgtype.Timestamptz
+}
+
+type Post struct {
+	ID             string
+	AuthorID       string
+	Body           string
+	ReplyToID      pgtype.UUID
+	QuoteOfID      pgtype.UUID
+	Visibility     string
+	CreatedAt      pgtype.Timestamptz
+	UpdatedAt      pgtype.Timestamptz
+	DeletedAt      pgtype.Timestamptz
+	SearchDocument interface{}
 }
 
 type PostAudience struct {
@@ -71,6 +97,12 @@ type PostCard struct {
 	QuotesCount  int64
 	Liked        bool
 	Reposted     bool
+}
+
+type PostMedium struct {
+	PostID   string
+	MediaID  string
+	Position int32
 }
 
 type Profile struct {
@@ -109,4 +141,19 @@ type User struct {
 	CreatedAt       pgtype.Timestamptz
 	UpdatedAt       pgtype.Timestamptz
 	Status          string
+}
+
+type VisibleNotification struct {
+	ID           string
+	RecipientID  string
+	ActorID      string
+	Type         string
+	SubjectID    string
+	PostID       pgtype.UUID
+	TargetPostID pgtype.UUID
+	CreatedAt    pgtype.Timestamptz
+	ReadAt       pgtype.Timestamptz
+	Handle       string
+	DisplayName  string
+	AvatarStyle  string
 }

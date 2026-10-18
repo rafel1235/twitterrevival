@@ -6,6 +6,7 @@ import { postsChanged, type Post, type PostPreview } from "@/lib/posts";
 import { UserAvatar } from "@/components/profile/shared";
 import { Icon } from "@/components/layout/icon";
 import { PostComposer } from "./composer";
+import { Attachments } from "./attachments";
 import styles from "./posts.module.css";
 
 export function Reference({
@@ -30,6 +31,13 @@ export function Reference({
         <strong>@{post.author.handle}</strong>
       </span>
       <p className="post-text">{post.body}</p>
+      {post.media.length > 0 && (
+        <span className={styles.context}>
+          {post.media.length}{" "}
+          {post.media.length === 1 ? "immagine" : "immagini"} · Apri il post per
+          vederle
+        </span>
+      )}
     </Link>
   );
 }
@@ -118,6 +126,7 @@ export function PostCard({
             <p className="post-text">{post.body}</p>
           </Link>
         )}
+        <Attachments items={post.media} />
         {post.quote_of_id && <Reference post={post.quote_of} kind="quote" />}
         <div
           className={`post-actions ${styles.actions}`}

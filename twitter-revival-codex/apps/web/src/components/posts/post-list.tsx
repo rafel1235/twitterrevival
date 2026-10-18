@@ -26,7 +26,7 @@ export function PostList({
     (cursor = "", signal = lifetime.current?.signal) => {
       const request = ++sequence.current;
       return api<{ data: PostPage }>(
-        `${path}?limit=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
+        `${path}${path.includes("?") ? "&" : "?"}limit=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
         { signal },
       )
         .then((result) => {

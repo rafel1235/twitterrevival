@@ -3,11 +3,14 @@ package posts
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"radura.local/api/internal/auth"
 	"radura.local/api/internal/db"
+	"radura.local/api/internal/media"
 	"radura.local/api/internal/users"
 )
 
@@ -60,6 +63,31 @@ func hydrate(ctx context.Context, q *db.Queries, viewer string, ids []string) (m
 		}
 		if p, ok := previews[post.QuoteOfID]; ok {
 			post.QuoteOf = &p
+		}
+		result[id] = post
+	}
+	allIDs := append(append([]string{}, ids...), refs...)
+	attachments, err := q.ListPostMedia(ctx, db.ListPostMediaParams{ViewerID: viewer, PostIds: allIDs})
+	if err != nil {
+		return nil, err
+	}
+	byPost := map[string][]media.Attachment{}
+	for _, a := range attachments {
+		byPost[a.PostID] = append(byPost[a.PostID], media.Attachment{ID: a.ID, URL: "/api/v1/media/" + a.ID + "/content", MimeType: a.MimeType, Bytes: a.Bytes, Width: a.Width, Height: a.Height, AltText: a.AltText})
+	}
+	images := func(id string) []media.Attachment {
+		if found := byPost[id]; found != nil {
+			return found
+		}
+		return []media.Attachment{}
+	}
+	for id, post := range result {
+		post.Media = images(id)
+		if post.ReplyTo != nil {
+			post.ReplyTo.Media = images(post.ReplyToID)
+		}
+		if post.QuoteOf != nil {
+			post.QuoteOf.Media = images(post.QuoteOfID)
 		}
 		result[id] = post
 	}
@@ -125,11 +153,71 @@ func (r *Repository) Create(ctx context.Context, actor string, in CreateInput) (
 	if err != nil {
 		return Post{}, err
 	}
+	if len(in.MediaIDs) > 0 {
+		rows, err := q.LockMedia(ctx, in.MediaIDs)
+		if err != nil {
+			return Post{}, err
+		}
+		invalid := func() error {
+			return &auth.ValidationError{Fields: map[string]string{"media_ids": "Immagini non disponibili, già usate o scadute. Caricale nuovamente."}}
+		}
+		if len(rows) != len(in.MediaIDs) {
+			return Post{}, invalid()
+		}
+		for _, row := range rows {
+			if row.OwnerID != actor || row.DeletedAt.Valid || row.CreatedAt.Time.Before(time.Now().Add(-24*time.Hour)) {
+				return Post{}, invalid()
+			}
+			attached, err := q.MediaAttached(ctx, row.ID)
+			if err != nil {
+				return Post{}, err
+			}
+			if attached {
+				return Post{}, invalid()
+			}
+		}
+		for i, mediaID := range in.MediaIDs {
+			if err = q.AttachMedia(ctx, db.AttachMediaParams{PostID: id, MediaID: mediaID, Position: int32(i)}); err != nil {
+				return Post{}, err
+			}
+		}
+	}
 	post, err := single(ctx, q, actor, id)
 	if err != nil {
 		return Post{}, err
 	}
 	return post, tx.Commit(ctx)
+}
+func (r *Repository) Search(ctx context.Context, viewer, term string, p users.Pagination) (Page, error) {
+	tx, err := r.Pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return Page{}, err
+	}
+	defer tx.Rollback(ctx)
+	q := db.New(tx)
+	rows, err := q.SearchPostIDs(ctx, db.SearchPostIDsParams{ViewerID: viewer, Term: term, CursorTime: pgtype.Timestamptz{Time: p.Before, Valid: true}, CursorID: p.ID, PageLimit: p.Limit + 1})
+	if err != nil {
+		return Page{}, err
+	}
+	page := Page{Items: make([]Event, 0, len(rows))}
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		page.Items = append(page.Items, Event{ID: row.ID, CreatedAt: row.CreatedAt.Time.UTC()})
+		ids = append(ids, row.ID)
+	}
+	if len(page.Items) > int(p.Limit) {
+		page.Items = page.Items[:p.Limit]
+		ids = ids[:p.Limit]
+		page.NextCursor = cursor(page.Items[len(page.Items)-1])
+	}
+	cards, err := hydrate(ctx, q, viewer, ids)
+	if err != nil {
+		return Page{}, err
+	}
+	for i, id := range ids {
+		page.Items[i].Post = cards[id]
+	}
+	return page, tx.Commit(ctx)
 }
 func (r *Repository) Mutate(ctx context.Context, actor, id, action, body string) (Post, error) {
 	tx, err := r.Pool.Begin(ctx)

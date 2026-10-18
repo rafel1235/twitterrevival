@@ -11,6 +11,8 @@ import (
 	"unicode/utf8"
 
 	"radura.local/api/internal/auth"
+	"radura.local/api/internal/media"
+	"radura.local/api/internal/search"
 	"radura.local/api/internal/users"
 )
 
@@ -25,11 +27,12 @@ type Author struct {
 	AvatarStyle string `json:"avatar_style"`
 }
 type Preview struct {
-	ID        string    `json:"id"`
-	Author    Author    `json:"author"`
-	Body      string    `json:"body"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        string             `json:"id"`
+	Author    Author             `json:"author"`
+	Body      string             `json:"body"`
+	CreatedAt time.Time          `json:"created_at"`
+	UpdatedAt time.Time          `json:"updated_at"`
+	Media     []media.Attachment `json:"media"`
 }
 type Post struct {
 	Preview
@@ -56,9 +59,10 @@ type Page struct {
 	NextCursor string  `json:"next_cursor,omitempty"`
 }
 type CreateInput struct {
-	Body      string `json:"body"`
-	ReplyToID string `json:"reply_to_id"`
-	QuoteOfID string `json:"quote_of_id"`
+	Body      string   `json:"body"`
+	ReplyToID string   `json:"reply_to_id"`
+	QuoteOfID string   `json:"quote_of_id"`
+	MediaIDs  []string `json:"media_ids"`
 }
 type EditInput struct {
 	Body string `json:"body"`
@@ -82,6 +86,21 @@ func ValidateBody(body *string) error {
 	return nil
 }
 func (s *Service) Create(ctx context.Context, actor string, in CreateInput) (Post, error) {
+	if len(in.MediaIDs) > 4 {
+		return Post{}, &auth.ValidationError{Fields: map[string]string{"media_ids": "Allega al massimo quattro immagini."}}
+	}
+	seen := map[string]bool{}
+	for i, id := range in.MediaIDs {
+		if err := validateID(id); err != nil {
+			return Post{}, err
+		}
+		id = strings.ToLower(id)
+		if seen[id] {
+			return Post{}, &auth.ValidationError{Fields: map[string]string{"media_ids": "Immagine duplicata."}}
+		}
+		seen[id] = true
+		in.MediaIDs[i] = id
+	}
 	if err := ValidateBody(&in.Body); err != nil {
 		return Post{}, err
 	}
@@ -98,6 +117,13 @@ func (s *Service) Create(ctx context.Context, actor string, in CreateInput) (Pos
 	in.ReplyToID = strings.ToLower(in.ReplyToID)
 	in.QuoteOfID = strings.ToLower(in.QuoteOfID)
 	return s.repo.Create(ctx, actor, in)
+}
+func (s *Service) Search(ctx context.Context, viewer, term string, p users.Pagination) (Page, error) {
+	term, err := search.Validate(term)
+	if err != nil {
+		return Page{}, err
+	}
+	return s.repo.Search(ctx, viewer, term, p)
 }
 func (s *Service) Get(ctx context.Context, viewer, id string) (Post, error) {
 	if err := validateID(id); err != nil {

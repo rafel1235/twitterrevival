@@ -1,14 +1,17 @@
-# Radura · Sprint 3
+# Radura · Sprint 4
 
 Social indipendente, nome interno **Twitter Revival**. Brand, testi, icone SVG e illustrazioni CSS originali. Nessuna affiliazione con Twitter/X, nessuno scraping o asset proprietario. Account, profili, follow, blocchi, post e interazioni sono reali e persistenti. La home autenticata mostra il feed cronologico dei seguiti e i propri post. Senza accesso compare solo un'anteprima esplicitamente **Demo**.
 
-## Usare lo Sprint 3
+## Usare lo Sprint 4
 
 - Sito: **http://localhost:3000**. Gli account creati nello Sprint 1 restano validi.
 - **Home dopo l'accesso**: pubblica fino a 280 code point Unicode. “Aggiorna” legge i nuovi post; “Carica altri post” prosegue con il cursore. Il feed include post propri e dei seguiti, risposte, citazioni e repost, in ordine cronologico.
 - **Post**: apri il testo/data per la conversazione; rispondi, metti/rimuovi mi piace, ripubblica/annulla repost o cita con un tuo commento. Puoi modificare solo il testo dei tuoi post ed eliminarli con conferma. I post restano dopo refresh/riavvio.
+- **Aggiungi immagine**: seleziona JPEG/PNG, descrivila e premi “Carica immagine”. Fino a quattro allegati con testo obbligatorio; recupero e cancellazione delle immagini in bozza anche dopo refresh.
+- **Esplora**: ricerca parole nei post, handle o nome nelle persone; risultati paginati con filtri per blocchi e account attivi.
+- **Notifiche**: follow, like, repost, risposte e citazioni persistenti. Badge/pagina aggiornati ogni 30 secondi, lettura singola o tutte. Nessuna notifica verso sé stessi.
 - **Impostazioni**: modifica nome, bio, località, sito e colore dell’avatar a iniziali; verifica email e accedi alla gestione dei blocchi.
-- **Profilo**: contatori reali e liste follower/seguiti. **Persone** apre un profilo tramite handle esatto; la ricerca per parole chiave resta allo Sprint 4.
+- **Profilo**: contatori e liste follower/seguiti reali. **Persone** apre ancora un profilo tramite handle esatto; **Esplora** offre la ricerca per parole chiave.
 - **Segui / Non seguire più** e **Blocca / Sblocca** persistono nel database. Un blocco rimuove i follow reciproci e nasconde entrambi i profili. Sbloccare non ripristina i follow.
 - **http://localhost:8025**: casella Mailpit locale. Qui arrivano i link di verifica e recupero password, senza invio di email su Internet. Le email automatiche sono reali messaggi SMTP catturati nell’ambiente di sviluppo.
 
@@ -20,7 +23,7 @@ Prerequisiti: Docker Engine/Desktop con Compose v2 o successivo. Dalla directory
 
 ```sh
 cp .env.example .env
-# Cambiare POSTGRES_PASSWORD in .env con una password locale, URL-safe.
+# Cambiare POSTGRES_PASSWORD e S3_SECRET_KEY con segreti locali distinti.
 docker compose up --build
 ```
 
@@ -29,6 +32,18 @@ Aprire **http://localhost:3000** (usare localhost, non 127.0.0.1: l’origin dev
 PowerShell: usare `Copy-Item .env.example .env` al posto di `cp`. Se si cambia `WEB_PORT`, aggiornare anche `APP_ORIGIN`. Password con caratteri riservati agli URL richiedono percent-encoding nel DSN; per il setup locale usare una password esadecimale.
 
 **Se `.env` esiste già, conservarlo:** non ricopiarlo dall’esempio e non cambiare la password di un database già inizializzato. Il file contiene solo configurazione locale ed è escluso da Git.
+
+Per aggiornare dallo Sprint 3 aggiungere solo le variabili S3 mancanti indicate in `.env.example`. `S3_SECRET_KEY` deve essere casuale, di almeno 32 byte; in questa installazione è già configurato. Esempio PowerShell 7 per aggiungerlo solo se assente, senza stamparlo:
+
+```powershell
+if ((Get-Content -Raw .env) -notmatch '(?m)^S3_SECRET_KEY=') {
+  $storageSecret = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+  Add-Content .env "`nS3_SECRET_KEY=$storageSecret"
+}
+docker compose up --build -d --wait
+```
+
+Compose aggiunge SeaweedFS **4.48** con volume persistente `media_data`, S3 solo su `127.0.0.1:8333`; console/admin non pubblicati. Bucket privato inizializzato dalla API. Immagini nel browser soltanto attraverso l'API autenticata; nessun account AWS/cloud necessario. Conservare anche il volume media: il solo dump PostgreSQL non contiene i byte delle immagini.
 
 Su Windows aprire Docker Desktop e attendere che il motore sia pronto prima dei comandi Compose ([avvio ufficiale](https://docs.docker.com/desktop/setup/install/windows-install/#start-docker-desktop)). Dopo una nuova installazione, riavviare VS Code/il terminale se `docker` o `docker-credential-desktop` non vengono trovati nel PATH.
 
@@ -51,7 +66,7 @@ docker compose down
 
 ## Sviluppo senza Docker
 
-Prerequisiti: Node 24, npm 11+, Go 1.27+, PostgreSQL 18 con estensione `citext` disponibile. Le versioni effettivamente verificate sono registrate in [docs/implementation-status.md](docs/implementation-status.md); `package-lock.json` e `services/api/go.sum` fissano le dipendenze.
+Prerequisiti: Node 24, npm 11+, Go 1.27+, PostgreSQL 18 con `citext` e un endpoint S3 compatibile privato. Per tenere solo lo storage in Compose: `docker compose up -d --wait storage`. Versioni verificate nel registro; lockfile npm e `services/api/go.sum` fissano le dipendenze, incluso SDK AWS Go v2 (S3 1.114.3, core 1.47.3, credentials 1.20.9).
 
 Creare un database e un utente PostgreSQL dedicati. Esportare queste variabili nella shell dell’API (il processo Go **non** carica automaticamente `.env`):
 
@@ -59,6 +74,11 @@ Creare un database e un utente PostgreSQL dedicati. Esportare queste variabili n
 export DATABASE_URL='postgres://radura:LOCAL_PASSWORD@localhost:5432/radura?sslmode=disable'
 export APP_ORIGIN='http://localhost:3000'
 export COOKIE_SECURE=false
+export S3_ENDPOINT='http://127.0.0.1:8333'
+export S3_REGION='us-east-1'
+export S3_BUCKET='radura-media'
+export S3_ACCESS_KEY='radura-local'
+export S3_SECRET_KEY='SAME_RANDOM_LOCAL_SECRET_AS_STORAGE'
 cd services/api
 go run ./cmd/server -migrate=up
 go run ./cmd/server
@@ -88,7 +108,9 @@ npm run start
 
 `003_posts.up.sql` aggiunge posts, likes, reposts, view di visibilità e indici per feed/risposte. Conserva tutti gli account, le sessioni e le connessioni esistenti.
 
-Il runner incorpora i file SQL nel binario, registra le versioni in `schema_migrations` e acquisisce un advisory lock transazionale. `up` applica tutte le versioni pendenti; `down` annulla **solo l’ultima versione**. Versioni sconosciute o non contigue sono rifiutate. Il primo rollback annulla la 003 ed elimina i post e le interazioni; il successivo annulla la 002 (connessioni e token email); il terzo annulla la 001 e cancella l'autenticazione. Eseguire rollback solo con API ferma e backup adeguato:
+`004_discovery_media.up.sql` aggiunge media/post_media, notifiche con trigger/view, campo generato FTS e indice GIN. Conserva post e interazioni esistenti; nessun backfill delle notifiche storiche.
+
+Il runner incorpora SQL, registra `schema_migrations` e acquisisce un advisory lock transazionale. `up` applica le versioni pendenti; `down` annulla **solo l'ultima**. Versioni sconosciute/non contigue rifiutate. Il primo rollback annulla la 004 (metadati media, notifiche e FTS), preservando gli sprint precedenti; non cancella gli oggetti S3. I successivi annullano 003, 002 e 001, eliminando i rispettivi dati. Usare API ferme e backup:
 
 ```sh
 cd services/api
@@ -96,7 +118,7 @@ go run ./cmd/server -migrate=down
 go run ./cmd/server -migrate=up
 ```
 
-`citext` è mantenuta al rollback perché potrebbe essere condivisa. Query parametrizzate in `db/queries/{auth,users,account_tokens,posts}.sql`, codice tipizzato generato con **sqlc 1.31.1** in `internal/db` e usato dai repository. Per rigenerare, dalla directory `services/api`: `sqlc generate`. L’API richiede schema versione **3** prima di avviarsi. I test di upgrade/rollback usano schemi isolati; il database del sito non viene azzerato.
+`citext` resta al rollback perché potrebbe essere condivisa. Query parametrizzate in `db/queries/`, codice tipizzato generato con **sqlc 1.31.1** in `internal/db`. Per rigenerare, da `services/api`: `sqlc generate`. API con schema versione **4**; healthcheck su DB/schema e S3. Test rollback su schemi isolati, senza azzerare il sito.
 
 ## Contratto HTTP
 
@@ -110,7 +132,7 @@ go run ./cmd/server -migrate=up
 
 Successi auth: `{"data":{"user":{"id":"uuid","handle":"ada","email":"ada@example.test","display_name":"Ada","created_at":"ISO-8601 UTC"}}}`. Errori: `{"error":{"code":"validation_failed","message":"Controlla i dati inseriti.","fields":{"handle":"..."}}}`. Nessun hash, token o dettaglio interno nel JSON. `fields` è opzionale. `logout` non ha body di risposta.
 
-Registrazione: `handle`, `email`, `display_name`, `password`. Login: `email`, `password`. Logout: `{}`. Tutte le mutazioni richiedono `Content-Type: application/json`, `X-CSRF-Protection: 1` e `Origin` uguale ad `APP_ORIGIN` (fallback `Referer` solo se Origin manca). Origin assente/non valido o metadata cross-site: `403`; tipo errato `415`; JSON invalido/campi ignoti `400`; body oltre 8 KiB `413`; input non valido `422`; quota superata `429` con `Retry-After`; saturazione worker `503`.
+Registrazione: `handle`, `email`, `display_name`, `password`. Login: `email`, `password`. Logout: `{}`. Mutazioni con `Content-Type: application/json` (upload: multipart), `X-CSRF-Protection: 1` e `Origin` uguale ad `APP_ORIGIN` (fallback Referer solo se Origin manca). Origin non valido/metadata cross-site: 403; tipo errato 415; JSON/campi ignoti 400; body JSON oltre 8 KiB 413; validazione 422; quota 429 con Retry-After; saturazione 503. Limite multipart distinto descritto sotto.
 
 Esempio da shell, API locale:
 
@@ -177,6 +199,32 @@ Testo da 1 a 280 code point Unicode dopo trim, newline/tab ammessi; controlli vi
 
 “Aggiorna” o refresh legge le azioni effettuate da un'altra sessione. Dopo una propria mutazione le liste ripartono dalla prima pagina; nessuna sincronizzazione realtime in questo sprint. Per transazioni, lock e politiche complete: [architettura Sprint 3](docs/architecture/sprint-3.md).
 
+## API aggiunte nello Sprint 4
+
+Tutte richiedono sessione. Mutazioni con origin/CSRF; upload multipart, altre mutazioni JSON `{}`.
+
+| Metodo e percorso                        | Risultato                                                        |
+| ---------------------------------------- | ---------------------------------------------------------------- |
+| `POST /api/v1/media`                     | Multipart `file` + `alt_text` → 201 con `data.media`.            |
+| `GET /api/v1/media/drafts`               | `data.media[]`: proprie bozze, `available_until` e `attachable`. |
+| `GET /api/v1/media/{id}`                 | Metadati visibili in `data.media`.                               |
+| `GET /api/v1/media/{id}/content`         | Byte immagine con cookie e visibilità; nessun URL S3 pubblico.   |
+| `DELETE /api/v1/media/{id}`              | 204 per bozza propria; 409 se associata, 404 se altrui.          |
+| `GET /api/v1/search?q=…&type=posts`      | Post visibili in `data.items`, cursore opzionale.                |
+| `GET /api/v1/search?q=…&type=users`      | Persone visibili in `data.users`, cursore opzionale.             |
+| `GET /api/v1/notifications`              | `data.items`, `next_cursor?`, `unread_count`.                    |
+| `GET /api/v1/notifications/unread-count` | `data.unread_count`.                                             |
+| `POST /api/v1/notifications/{id}/read`   | 204; solo destinatario, ripetibile, 404 se altrui/non visibile.  |
+| `POST /api/v1/notifications/read`        | 204; marca tutte quelle visibili nello snapshot della query.     |
+
+Upload: JPEG/PNG max 5 MiB, 4096 px per lato/8 megapixel, ricodifica e rimozione metadati, output max 8 MiB. Alt obbligatorio 1–200 code point; SVG/GIF e MIME incongruente → 415, dimensione byte → 413, dati/limiti immagine → 422. Massimo 12 bozze e 100 MiB attivi/account, due elaborazioni simultanee e 20 mutazioni/minuto per peer. Bozze associabili per 24 ore, poi ancora eliminabili manualmente. `POST /posts` accetta `media_ids` (max quattro ID propri, unici, caricati e non riutilizzati). Card/preview hanno `media[]` con `id,url,mime_type,bytes,width,height,alt_text`. Testo sempre obbligatorio; allegati immutabili dopo pubblicazione.
+
+Ricerca: q di 2–100 code point, limite 20/max 50 e cursori esistenti. Post tramite FTS simple/websearch, senza stemming o rimozione accenti; persone per prefisso handle o parte del nome, senza email. Wildcard LIKE letterali; ordine cronologico, nessun ranking; 120 ricerche/minuto per peer.
+
+Notifiche atomiche per nuove azioni follow/like/repost/reply/quote, senza notifiche verso sé stessi o retroattive. DTO: `id,type,actor,post_id?,created_at,read_at` nullable. Cursori e limite 20/max 50. Undo, cancellazione post o blocco rimuovono le notifiche collegate; sblocco senza ripristino. Filtri di visibilità a ogni lettura. Polling 30 secondi con scheda visibile; lista riletta dalla prima pagina. Quota mutazioni stato lettura 60/minuto per peer.
+
+Purge S3 e riconciliazione orfani ancora non automatici. Soft delete conserva dati/immagini, conteggiati nella quota. Avatar restano placeholder; niente video, WebP o upload profilo. Transazioni e limiti in [architettura Sprint 4](docs/architecture/sprint-4.md).
+
 ## Email e recupero password
 
 Compose include Mailpit **1.31.6**, con interfaccia HTTP su loopback 8025 e SMTP su loopback 1025. Dall’API in container il server è `mailpit:1025`; con Go nativo il default è `127.0.0.1:1025`. `SMTP_FROM`, `SMTP_ADDR`, `SMTP_STARTTLS`, `SMTP_USERNAME`, `SMTP_PASSWORD` sono configurabili per l’avvio nativo. Compose è un ambiente locale con cattura email, senza relay Internet.
@@ -197,7 +245,7 @@ Il recupero accoda il lavoro prima del lookup dell’email, così account noti e
 
 Le mutazioni social hanno quota separata di 60/minuto per peer; verifica e recupero 10/minuto. Valgono lo stesso limite di body, origin esatto e header anti-CSRF. Follow e blocchi sono serializzati nel DB mediante advisory lock della coppia; lo sblocco non ripristina relazioni. La sessione del frontend viene invalidata su 401 e le risposte precedenti a logout/reset non possono ripristinare un utente in cache.
 
-Le scritture post hanno quota separata di 90/minuto per peer e gli stessi controlli Origin/CSRF. Interazioni e blocchi acquisiscono il medesimo lock per coppia, poi il lock del post; la visibilità viene ricontrollata nella transazione. Ogni lettura multipla usa uno snapshot coerente e filtra anche i contenuti incorporati. Moderazione, esportazione/cancellazione dati e media restano negli sprint dedicati. Non è un servizio pronto per il pubblico. Nessun deploy incluso.
+Scritture post: quota separata 90/minuto per peer e controlli Origin/CSRF. Interazioni/blocchi acquisiscono lock per coppia e poi post; visibilità ricontrollata nella transazione. Letture multiple post/notifiche in snapshot coerente; immagini protette dalla sessione anche in download. Moderazione, retention ed esportazione/cancellazione dati restano allo Sprint 5; nessuna promessa di uso pubblico o deploy.
 
 ## Verifiche riproducibili
 
@@ -228,6 +276,25 @@ Screenshot a 1440×900, 768×1024, 390×844 in `test-results/`; report con `npx 
 
 La CI GitHub Actions avvia PostgreSQL e Mailpit, esegue format/lint/tipi/build, Go vet/test con race detector e il ciclo Playwright completo. `.github/workflows/ci.yml` serve per pubblicare questa directory come repository autonomo; `../.github/workflows/radura-ci.yml` è il workflow nella root Git effettiva della cartella contenitore `twitter revival`, con working-directory e cache configurate per il progetto annidato. L’esecuzione remota richiede pubblicare il repository e non viene dichiarata verificata localmente.
 
+### Test dello storage S3
+
+Per eseguire anche l'integrazione media reale, avviare `docker compose up -d --wait db storage`, creare una volta il database dedicato `radura_test` e impostare nella shell dei test:
+
+```sh
+export TEST_DATABASE_URL='postgres://radura:LOCAL_PASSWORD@localhost:5432/radura_test?sslmode=disable'
+export TEST_S3_ENDPOINT='http://127.0.0.1:8333'
+export S3_ACCESS_KEY='radura-local'
+export S3_SECRET_KEY='SAME_RANDOM_LOCAL_SECRET_AS_STORAGE'
+cd services/api
+go test -count=1 -v ./...
+```
+
+I test creano/rimuovono schemi isolati e usano il bucket separato `radura-tests`, con pulizia degli oggetti creati. Senza `TEST_S3_ENDPOINT` i test media reali sono esplicitamente saltati; senza `TEST_DATABASE_URL` viene saltata l'integrazione PostgreSQL. Non usare database/bucket di produzione. PowerShell: `$env:TEST_S3_ENDPOINT='http://127.0.0.1:8333'` e analogamente le altre variabili. Go non carica automaticamente `.env`.
+
+La suite Playwright comprende ora anche upload S3, rifiuto di SVG mascherato, recupero bozza dopo refresh, immagini nei risultati, ricerca persone, notifiche lette persistite e blocchi su download/ricerca/notifiche. Il polling automatico viene provato accelerando l'orologio del browser: API, database e storage rimangono reali. Screenshot risultati/notifiche nelle tre viewport. Fixture PNG originale del progetto, descritta nella matrice UI Sprint 4.
+
+Entrambi i workflow CI avviano anche SeaweedFS 4.48 e impostano `TEST_S3_ENDPOINT`, con credenziali esclusivamente locali di test. Il workflow nella root Git effettiva resta `../.github/workflows/radura-ci.yml`; il template interno serve per un repository autonomo. Pipeline remota non ancora eseguita.
+
 ## Struttura essenziale
 
 ```text
@@ -235,11 +302,15 @@ apps/web/src/app/                 pagine App Router e design token
 apps/web/src/components/          layout, auth, anteprima anonima demo
 apps/web/src/components/posts/    composer, card, feed e conversazioni reali
 apps/web/src/components/profile/  profilo, editor, connessioni, blocchi, persone
+apps/web/src/components/discovery/ ricerca e notifiche
 apps/web/tests/                   smoke, auth, identità, post e feed reali
 services/api/cmd/server/          API e comandi migrazione/healthcheck
 services/api/internal/auth/       servizio e repository PostgreSQL
 services/api/internal/users/      profili e grafo sociale
 services/api/internal/posts/      CRUD, interazioni, feed e visibilità
+services/api/internal/media/      validazione, ricodifica, repository e S3
+services/api/internal/search/     validazione query e pattern letterali
+services/api/internal/notifications/ elenco, conteggi e lettura
 services/api/internal/mailer/     invio SMTP con timeout e STARTTLS
 services/api/internal/httpapi/    handler, CSRF, rate limit, test
 services/api/internal/db/         query Go generate da sqlc
@@ -247,7 +318,7 @@ services/api/db/queries/          SQL sorgente
 services/api/migrations/          schema, rollback, runner embedded
 docs/                            architettura, provenienza UI, stato verifiche
 .github/workflows/ci.yml          pipeline
-compose.yaml                     db/mailpit → migrate → api → web
+compose.yaml                     db/storage/mailpit → migrate → api → web
 ```
 
-Esiti effettivi e file dello Sprint 3 in [docs/implementation-status.md](docs/implementation-status.md). Il prossimo incremento è Sprint 4 (media, ricerca e notifiche), solo su richiesta. Nessuna funzione futura viene presentata come pronta.
+Esiti e file dello Sprint 4 nel [registro](docs/implementation-status.md), politiche nell'[architettura Sprint 4](docs/architecture/sprint-4.md). Il prossimo incremento è Sprint 5 (sicurezza, GDPR e moderazione), solo su richiesta. Nessuna funzione futura presentata come pronta.

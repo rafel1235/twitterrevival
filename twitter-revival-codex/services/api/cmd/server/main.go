@@ -17,6 +17,8 @@ import (
 	"radura.local/api/internal/auth"
 	"radura.local/api/internal/httpapi"
 	"radura.local/api/internal/mailer"
+	"radura.local/api/internal/media"
+	"radura.local/api/internal/notifications"
 	"radura.local/api/internal/posts"
 	"radura.local/api/internal/users"
 	"radura.local/api/migrations"
@@ -81,6 +83,13 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	storage, err := media.NewS3(env("S3_ENDPOINT", "http://127.0.0.1:8333"), env("S3_REGION", "us-east-1"), env("S3_BUCKET", "radura-media"), os.Getenv("S3_ACCESS_KEY"), os.Getenv("S3_SECRET_KEY"))
+	if err != nil {
+		return err
+	}
+	if err = storage.Ensure(ctx); err != nil {
+		return err
+	}
 	healthy := func(ctx context.Context) error {
 		var version int
 		if err := pool.QueryRow(ctx, "SELECT COALESCE(max(version),0) FROM schema_migrations").Scan(&version); err != nil {
@@ -89,7 +98,7 @@ func run() error {
 		if version != migrations.CurrentVersion {
 			return errors.New("schema version mismatch")
 		}
-		return nil
+		return storage.Ready(ctx)
 	}
 	origin := env("APP_ORIGIN", "http://localhost:3000")
 	startTLS, err := strconv.ParseBool(env("SMTP_STARTTLS", "false"))
@@ -106,7 +115,7 @@ func run() error {
 	accounts := auth.NewAccountService(&auth.PostgresRepository{Pool: pool}, service, sender, origin)
 	profiles := users.NewService(&users.Repository{Pool: pool})
 	postService := posts.NewService(&posts.Repository{Pool: pool})
-	handler, err := httpapi.New(service, httpapi.Config{Origin: origin, CookieSecure: secure, SessionTTL: duration}, healthy, httpapi.WithUsers(profiles), httpapi.WithAccounts(accounts), httpapi.WithPosts(postService))
+	handler, err := httpapi.New(service, httpapi.Config{Origin: origin, CookieSecure: secure, SessionTTL: duration}, healthy, httpapi.WithUsers(profiles), httpapi.WithAccounts(accounts), httpapi.WithPosts(postService), httpapi.WithMedia(media.NewService(&media.Repository{Pool: pool, Store: storage})), httpapi.WithNotifications(notifications.NewService(pool)))
 	if err != nil {
 		return err
 	}

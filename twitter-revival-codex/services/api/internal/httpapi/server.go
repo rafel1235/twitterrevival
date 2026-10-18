@@ -15,6 +15,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"radura.local/api/internal/auth"
+	"radura.local/api/internal/media"
+	"radura.local/api/internal/notifications"
 	"radura.local/api/internal/posts"
 	"radura.local/api/internal/users"
 )
@@ -25,14 +27,16 @@ type Config struct {
 	SessionTTL   time.Duration
 }
 type Server struct {
-	auth       *auth.Service
-	cfg        Config
-	cookieName string
-	healthy    func(context.Context) error
-	limiter    *Limiter
-	users      *users.Service
-	accounts   *auth.AccountService
-	posts      *posts.Service
+	auth          *auth.Service
+	cfg           Config
+	cookieName    string
+	healthy       func(context.Context) error
+	limiter       *Limiter
+	users         *users.Service
+	accounts      *auth.AccountService
+	posts         *posts.Service
+	media         *media.Service
+	notifications *notifications.Service
 }
 type apiError struct {
 	Code    string            `json:"code"`
@@ -47,6 +51,10 @@ func WithAccounts(service *auth.AccountService) Option {
 	return func(s *Server) { s.accounts = service }
 }
 func WithPosts(service *posts.Service) Option { return func(s *Server) { s.posts = service } }
+func WithMedia(service *media.Service) Option { return func(s *Server) { s.media = service } }
+func WithNotifications(service *notifications.Service) Option {
+	return func(s *Server) { s.notifications = service }
+}
 
 func New(service *auth.Service, cfg Config, healthy func(context.Context) error, options ...Option) (http.Handler, error) {
 	origin, err := url.Parse(cfg.Origin)
@@ -119,6 +127,28 @@ func New(service *auth.Service, cfg Config, healthy func(context.Context) error,
 		})
 	})
 	router.With(s.requireUser).Get("/api/v1/feed/home", func(w http.ResponseWriter, r *http.Request) { s.postList(w, r, "home") })
+	router.With(s.requireUser, NewLimiter(120, time.Minute, 4096).Middleware).Get("/api/v1/search", s.search)
+	router.Route("/api/v1/media", func(r chi.Router) {
+		r.Use(s.requireUser)
+		r.Get("/drafts", s.draftMedia)
+		r.Get("/{id}", s.getMedia)
+		r.Get("/{id}/content", s.getMedia)
+		r.Group(func(m chi.Router) {
+			m.Use(s.originCheck, NewLimiter(20, time.Minute, 4096).Middleware)
+			m.Post("/", s.uploadMedia)
+			m.Delete("/{id}", s.deleteMedia)
+		})
+	})
+	router.Route("/api/v1/notifications", func(r chi.Router) {
+		r.Use(s.requireUser)
+		r.Get("/", s.listNotifications)
+		r.Get("/unread-count", s.unreadNotifications)
+		r.Group(func(m chi.Router) {
+			m.Use(s.originCheck, NewLimiter(60, time.Minute, 4096).Middleware)
+			m.Post("/read", s.readNotifications)
+			m.Post("/{id}/read", s.readNotifications)
+		})
+	})
 	router.NotFound(func(w http.ResponseWriter, r *http.Request) { fail(w, 404, "not_found", "Endpoint inesistente.", nil) })
 	router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 		fail(w, 405, "method_not_allowed", "Metodo non consentito.", nil)
@@ -153,6 +183,16 @@ func (s *Server) handleError(w http.ResponseWriter, err error) {
 		fail(w, 403, "post_forbidden", "Puoi modificare o eliminare solo i tuoi post.", nil)
 	case errors.Is(err, users.ErrBlocked):
 		fail(w, 403, "relationship_blocked", "Questa connessione non è consentita.", nil)
+	case errors.Is(err, media.ErrNotFound), errors.Is(err, notifications.ErrNotFound):
+		fail(w, 404, "not_found", "Risorsa non disponibile.", nil)
+	case errors.Is(err, media.ErrUnsupported):
+		fail(w, 415, "unsupported_image", "Sono ammesse soltanto immagini JPEG o PNG valide, con MIME corrispondente.", nil)
+	case errors.Is(err, media.ErrTooLarge):
+		fail(w, 413, "image_too_large", "Immagine troppo grande (massimo 5 MiB in upload e 8 MiB elaborata).", nil)
+	case errors.Is(err, media.ErrAttached):
+		fail(w, 409, "image_attached", "L'immagine appartiene già a un post. Puoi eliminare il post.", nil)
+	case errors.Is(err, media.ErrStorage):
+		fail(w, 503, "storage_unavailable", "Storage non disponibile. Riprova tra poco.", nil)
 	case errors.Is(err, auth.ErrInvalidToken):
 		fail(w, 400, "invalid_token", "Link non valido, scaduto o già utilizzato. Richiedine uno nuovo.", nil)
 	case errors.Is(err, auth.ErrBusy):
@@ -262,7 +302,7 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 	if err := s.healthy(ctx); err != nil {
-		fail(w, 503, "unavailable", "Database non disponibile o migrazione mancante.", nil)
+		fail(w, 503, "unavailable", "Dipendenze del servizio non disponibili o schema non aggiornato.", nil)
 		return
 	}
 	respond(w, 200, map[string]any{"data": map[string]string{"status": "ok"}})

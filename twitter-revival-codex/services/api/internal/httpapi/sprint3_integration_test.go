@@ -310,6 +310,11 @@ func TestPostsMigrationConstraintsAndRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.call("GET", "/api/v1/posts/"+p.ID, "", ca, 200)
+	for v := migrations.CurrentVersion; v > 3; v-- {
+		if err := migrations.Run(ctx, f.pool, "down"); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err := migrations.Run(ctx, f.pool, "down"); err != nil {
 		t.Fatal(err)
 	}

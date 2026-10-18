@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"radura.local/api/internal/auth"
 	"radura.local/api/internal/mailer"
+	"radura.local/api/internal/notifications"
 	"radura.local/api/internal/posts"
 	"radura.local/api/internal/users"
 	"radura.local/api/migrations"
@@ -93,7 +94,7 @@ func newSprintFixture(t *testing.T, emails bool) *sprintFixture {
 		t.Fatal(err)
 	}
 	people := users.NewService(&users.Repository{Pool: pool})
-	options := []Option{WithUsers(people), WithPosts(posts.NewService(&posts.Repository{Pool: pool}))}
+	options := []Option{WithUsers(people), WithPosts(posts.NewService(&posts.Repository{Pool: pool})), WithNotifications(notifications.NewService(pool))}
 	f := &sprintFixture{t: t, pool: pool, people: people}
 	if emails {
 		f.mail = &capturingSender{make(chan mailer.Message, 16)}

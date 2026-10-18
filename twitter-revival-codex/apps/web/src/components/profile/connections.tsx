@@ -10,10 +10,12 @@ export function ConnectionList({
   path,
   empty,
   blocked = false,
+  label,
 }: {
   path: string;
   empty: string;
   blocked?: boolean;
+  label?: string;
 }) {
   const [page, setPage] = useState<ConnectionPage>({ users: [] });
   const [loading, setLoading] = useState(true);
@@ -22,7 +24,7 @@ export function ConnectionList({
   const load = useCallback(
     (cursor?: string, signal?: AbortSignal) =>
       api<{ data: ConnectionPage }>(
-        `${path}?limit=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
+        `${path}${path.includes("?") ? "&" : "?"}limit=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
         { signal },
       )
         .then((response) => {
@@ -73,7 +75,9 @@ export function ConnectionList({
   return (
     <section
       className={styles.connectionList}
-      aria-label={blocked ? "Elenco utenti bloccati" : "Elenco connessioni"}
+      aria-label={
+        label || (blocked ? "Elenco utenti bloccati" : "Elenco connessioni")
+      }
     >
       {error && <PageError message={error} retry={() => void load()} />}
       <div aria-live="polite">

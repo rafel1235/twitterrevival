@@ -25,13 +25,15 @@ export async function api<T>(
   path: string,
   options: {
     body?: unknown;
+    form?: FormData;
     signal?: AbortSignal;
     method?: "GET" | "POST" | "PATCH" | "DELETE";
   } = {},
 ): Promise<T> {
   let response: Response;
   const method =
-    options.method ?? (options.body === undefined ? "GET" : "POST");
+    options.method ??
+    (options.body === undefined && !options.form ? "GET" : "POST");
   const mutation = method !== "GET";
   try {
     response = await fetch(`/api/v1${path}`, {
@@ -41,8 +43,12 @@ export async function api<T>(
       signal: options.signal,
       headers: !mutation
         ? undefined
-        : { "Content-Type": "application/json", "X-CSRF-Protection": "1" },
-      body: mutation ? JSON.stringify(options.body ?? {}) : undefined,
+        : options.form
+          ? { "X-CSRF-Protection": "1" }
+          : { "Content-Type": "application/json", "X-CSRF-Protection": "1" },
+      body: mutation
+        ? (options.form ?? JSON.stringify(options.body ?? {}))
+        : undefined,
     });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") throw error;

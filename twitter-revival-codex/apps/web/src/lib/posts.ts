@@ -10,6 +10,16 @@ export type PostPreview = {
   body: string;
   created_at: string;
   updated_at: string;
+  media: Attachment[];
+};
+export type Attachment = {
+  id: string;
+  url: string;
+  mime_type: string;
+  bytes: number;
+  width: number;
+  height: number;
+  alt_text: string;
 };
 export type Post = PostPreview & {
   reply_to_id?: string;

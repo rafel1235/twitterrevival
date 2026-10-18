@@ -6,6 +6,8 @@ import { useState } from "react";
 import { useSession } from "@/components/auth/session-provider";
 import { Icon } from "./icon";
 import { UserAvatar } from "@/components/profile/shared";
+import { SearchBox } from "@/components/discovery/search-view";
+import { useUnreadNotifications } from "@/lib/notifications";
 
 export const productName = process.env.NEXT_PUBLIC_PRODUCT_NAME || "Radura";
 
@@ -80,6 +82,20 @@ function AccountPanel() {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user } = useSession();
+  const unread = useUnreadNotifications(user?.id);
+  const bell = (
+    <span className="notification-icon">
+      <Icon name="bell" />
+      {unread > 0 && (
+        <span
+          className="notification-badge"
+          aria-label={`${unread} da leggere`}
+        >
+          {unread > 99 ? "99+" : unread}
+        </span>
+      )}
+    </span>
+  );
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main">
@@ -104,26 +120,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Icon name="home" />
             <span>Home</span>
           </Link>
-          <button
-            className="nav-item"
-            disabled
-            title="Ricerca disponibile in Sprint 4"
+          <Link
+            className={`nav-item ${pathname === "/search" ? "active" : ""}`}
+            href="/search"
+            aria-current={pathname === "/search" ? "page" : undefined}
           >
             <Icon name="search" />
-            <span>
-              Esplora <small>Sprint 4</small>
-            </span>
-          </button>
-          <button
-            className="nav-item"
-            disabled
-            title="Notifiche disponibili in Sprint 4"
+            <span>Esplora</span>
+          </Link>
+          <Link
+            className={`nav-item ${pathname === "/notifications" ? "active" : ""}`}
+            href="/notifications"
+            aria-label="Notifiche"
+            aria-current={pathname === "/notifications" ? "page" : undefined}
           >
-            <Icon name="bell" />
-            <span>
-              Notifiche <small>Sprint 4</small>
-            </span>
-          </button>
+            {bell}
+            <span>Notifiche</span>
+          </Link>
           <Link
             href="/people"
             className={`nav-item ${pathname === "/people" ? "active" : ""}`}
@@ -150,7 +163,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </Link>
         </nav>
         <div className="sprint-note">
-          <span className="status-dot" /> Sprint 3 · Conversiamo
+          <span className="status-dot" /> Sprint 4 · Nuove prospettive
         </div>
         <AccountPanel />
         <p className="independent-note">
@@ -163,10 +176,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
       <aside className="right-column" aria-label="Informazioni sulla community">
-        <div className="search-placeholder">
-          <Icon name="search" size={19} />
-          <span>La ricerca arriva in Sprint 4</span>
-        </div>
+        <SearchBox compact />
         <section className="welcome-card">
           <span className="eyebrow">
             BENVENUTI IN {productName.toUpperCase()}
@@ -207,10 +217,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
           <div className="milestone">
-            <span className="milestone-number current">03</span>
+            <span className="milestone-number">03</span>
             <div>
               <strong>Inizia la conversazione</strong>
-              <p>Post e timeline reali · Sprint attuale</p>
+              <p>Post e timeline reali · Completato</p>
+            </div>
+          </div>
+          <div className="milestone">
+            <span className="milestone-number current">04</span>
+            <div>
+              <strong>Nuove prospettive</strong>
+              <p>Immagini, ricerca e notifiche · Sprint attuale</p>
             </div>
           </div>
         </section>
@@ -227,8 +244,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         >
           <Icon name="home" />
         </Link>
-        <Link href="/people" aria-label="Persone">
+        <Link
+          href="/search"
+          aria-label="Esplora"
+          aria-current={pathname === "/search" ? "page" : undefined}
+        >
           <Icon name="search" />
+        </Link>
+        <Link
+          href="/notifications"
+          aria-label="Notifiche"
+          aria-current={pathname === "/notifications" ? "page" : undefined}
+        >
+          {bell}
         </Link>
         <Link href="/settings/profile" aria-label="Impostazioni profilo">
           <Icon name="settings" />

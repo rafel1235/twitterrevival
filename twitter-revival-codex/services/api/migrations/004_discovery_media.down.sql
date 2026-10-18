@@ -1,0 +1,15 @@
+DROP VIEW visible_notifications;
+DROP TRIGGER blocks_clear_notifications ON blocks;
+DROP TRIGGER posts_notify ON posts;
+DROP TRIGGER reposts_notify ON reposts;
+DROP TRIGGER likes_notify ON likes;
+DROP TRIGGER follows_notify ON follows;
+DROP FUNCTION clear_blocked_notifications();
+DROP FUNCTION notify_post();
+DROP FUNCTION notify_interaction();
+DROP FUNCTION notify_follow();
+DROP TABLE notifications;
+DROP INDEX users_handle_prefix_idx;
+ALTER TABLE posts DROP COLUMN search_document;
+DROP TABLE post_media;
+DROP TABLE media;
