@@ -20,14 +20,14 @@ type AccountService struct {
 	passwords *Service
 	sender    mailer.Sender
 	origin    string
-	jobs      chan mailJob
+	wake      chan struct{}
 	started   atomic.Bool
 	running   atomic.Bool
 	workers   sync.WaitGroup
 }
 
 func NewAccountService(repo *PostgresRepository, passwords *Service, sender mailer.Sender, origin string) *AccountService {
-	return &AccountService{repo: repo, passwords: passwords, sender: sender, origin: origin, jobs: make(chan mailJob, 32)}
+	return &AccountService{repo: repo, passwords: passwords, sender: sender, origin: origin, wake: make(chan struct{}, 1)}
 }
 func (s *AccountService) Start(ctx context.Context) {
 	if !s.started.CompareAndSwap(false, true) {
@@ -38,20 +38,20 @@ func (s *AccountService) Start(ctx context.Context) {
 	go func() {
 		defer s.workers.Done()
 		defer s.running.Store(false)
+		ticker := time.NewTicker(200 * time.Millisecond)
+		defer ticker.Stop()
 		for {
 			if ctx.Err() != nil {
 				return
 			}
+			if s.processOne(ctx) {
+				continue
+			}
 			select {
 			case <-ctx.Done():
 				return
-			case job := <-s.jobs:
-				delivery, cancel := context.WithTimeout(ctx, 15*time.Second)
-				err := s.deliver(delivery, job)
-				cancel()
-				if err != nil && !errors.Is(err, ErrCooldown) && !errors.Is(err, pgx.ErrNoRows) && !errors.Is(err, context.Canceled) {
-					slog.Error("account email delivery failed", "purpose", job.Purpose)
-				}
+			case <-s.wake:
+			case <-ticker.C:
 			}
 		}
 	}()
@@ -61,12 +61,47 @@ func (s *AccountService) enqueue(job mailJob) error {
 	if !s.running.Load() {
 		return ErrBusy
 	}
-	select {
-	case s.jobs <- job:
-		return nil
-	default:
-		return ErrBusy
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := s.repo.enqueueMail(ctx, job); err != nil {
+		return err
 	}
+	select {
+	case s.wake <- struct{}{}:
+	default:
+	}
+	return nil
+}
+
+func (s *AccountService) processOne(ctx context.Context) bool {
+	claim, cancel := context.WithTimeout(ctx, 3*time.Second)
+	job, id, attempt, err := s.repo.claimMail(claim)
+	cancel()
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false
+	}
+	if err != nil {
+		if ctx.Err() == nil {
+			slog.Warn("mail queue claim failed")
+		}
+		return false
+	}
+	delivery, stop := context.WithTimeout(ctx, 15*time.Second)
+	err = s.deliver(delivery, job)
+	stop()
+	ack, end := context.WithTimeout(context.Background(), 3*time.Second)
+	defer end()
+	if err == nil || (errors.Is(err, ErrCooldown) && attempt == 1) || errors.Is(err, pgx.ErrNoRows) {
+		_, err = s.repo.Pool.Exec(ack, "DELETE FROM mail_jobs WHERE id=$1 AND attempts=$2", id, attempt)
+	} else {
+		slog.Warn("account email delivery deferred", "purpose", job.Purpose)
+		delay := time.Minute * time.Duration(1<<uint(attempt-1))
+		_, err = s.repo.Pool.Exec(ack, "UPDATE mail_jobs SET leased_until=NULL,available_at=now()+$2::int*interval '1 second' WHERE id=$1 AND attempts=$3", id, int(delay.Seconds()), attempt)
+	}
+	if err != nil {
+		slog.Warn("mail queue acknowledgement failed")
+	}
+	return true
 }
 func (s *AccountService) RequestVerification(userID string) error {
 	return s.enqueue(mailJob{UserID: userID, Purpose: VerificationPurpose})

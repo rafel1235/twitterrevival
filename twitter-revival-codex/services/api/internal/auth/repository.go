@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"radura.local/api/internal/beta"
 	"radura.local/api/internal/db"
 )
 
@@ -32,7 +33,7 @@ type Account struct {
 	PasswordHash string
 	Status       string
 }
-type NewUser struct{ Handle, Email, DisplayName, PasswordHash string }
+type NewUser struct{ Handle, Email, DisplayName, PasswordHash, InviteToken string }
 type NewSession struct {
 	Hash      []byte
 	ExpiresAt time.Time
@@ -46,7 +47,10 @@ type Repository interface {
 	RevokeSession(context.Context, []byte) error
 }
 
-type PostgresRepository struct{ Pool *pgxpool.Pool }
+type PostgresRepository struct {
+	Pool *pgxpool.Pool
+	Beta *beta.Service
+}
 
 func (r *PostgresRepository) Register(ctx context.Context, input NewUser, session NewSession) (User, error) {
 	tx, err := r.Pool.Begin(ctx)
@@ -55,6 +59,13 @@ func (r *PostgresRepository) Register(ctx context.Context, input NewUser, sessio
 	}
 	defer tx.Rollback(ctx)
 	queries := db.New(tx)
+	var inviteID, cohort string
+	if r.Beta != nil {
+		inviteID, cohort, err = r.Beta.Reserve(ctx, tx, input.InviteToken, input.Email)
+		if err != nil {
+			return User{}, err
+		}
+	}
 	row, err := queries.InsertUser(ctx, db.InsertUserParams{Handle: input.Handle, Email: input.Email, PasswordHash: input.PasswordHash})
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -69,6 +80,11 @@ func (r *PostgresRepository) Register(ctx context.Context, input NewUser, sessio
 	}
 	if err = queries.InsertSession(ctx, db.InsertSessionParams{UserID: user.ID, TokenHash: session.Hash, ExpiresAt: pgtype.Timestamptz{Time: session.ExpiresAt, Valid: true}}); err != nil {
 		return User{}, err
+	}
+	if r.Beta != nil {
+		if err = r.Beta.Admit(ctx, tx, inviteID, cohort, user.ID); err != nil {
+			return User{}, err
+		}
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return User{}, err

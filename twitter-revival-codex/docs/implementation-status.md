@@ -1,113 +1,124 @@
-# Stato implementazione — Sprint 5
+# Stato implementazione — Sprint 6
 
-Data: **18 ottobre 2026**. Prodotto locale: **Radura**, progetto interno Twitter Revival. Sprint 5 implementato; nessuna implementazione Sprint 6 o pubblicazione esterna.
+Data: **18 ottobre 2026**. Prodotto locale: **Radura**, progetto interno Twitter Revival. Beta a inviti implementata e verificata; per scelta esplicita dell’utente **soltanto locale, con HTTPS locale**. Pilotaggio umano e osservazione D7 ancora da svolgere.
 
 ## Stato iniziale e conservazione
 
-- Letti integralmente AGENTS.md e PROJECT_SPEC.md; repository applicativo annidato in `twitter-revival-codex`, root Git nella cartella superiore `twitter revival`.
-- Git inizialmente pulito, ramo `main`. Nessun commit, push, cambio ramo, reset o modifica dei file di specifica. `.env` e i segreti esistenti conservati.
-- Stack precedente sano con schema 4. Backup preliminare PostgreSQL `.local/backups/before-sprint5.dump`, **105.347 byte**. Nessun azzeramento del database o dei volumi attivi.
-- Registro precedente archiviato in `docs/implementation-status-sprint-4.md`.
+- Letti integralmente AGENTS.md e PROJECT_SPEC.md. Progetto in `twitter-revival-codex`, root Git nella cartella superiore `twitter revival`.
+- Git inizialmente pulito, ramo `main`. Nessun commit, push, reset o cambio ramo. Specifiche e prompt iniziale conservati.
+- Stack sano con schema 5. Backup preliminare `.local/backups/before-sprint6.dump`, **135.452 byte**. Volumi DB/S3 esistenti preservati.
+- `.env` conservato: aggiunta soltanto la variabile mancante METRICS_TOKEN, generata con CSPRNG e mai stampata. Token di monitor in file locale ignorato da Git; nessuna rotazione di credenziali DB/S3.
+- Registro Sprint 5 archiviato in `docs/implementation-status-sprint-5.md`.
 
-## Incremento realizzato
+## Attività completate
 
-- Migrazione **005** con rollback: ruoli, report, audit, oscuramento dei post, stato purge media e rate limit persistenti.
-- Report reali su post/profili, idempotenza per report aperto, ricevuta e lista personale paginata. Blocchi dello Sprint 2 preservati e coperti dalle regressioni.
-- Pannello moderatore con filtro/cursori, prove testuali, decisioni motivate e audit transazionale. Oscuramento/ripristino, sospensione/riattivazione e revoca sessioni/token. Ruoli esclusivamente tramite CLI locale tracciata; nessun amministratore predefinito.
-- Visibilità uniforme in feed, ricerca, anteprime, notifiche e download. L'autore può eliminare anche il proprio post oscurato; un moderatore non ripristina un post eliminato.
-- Quote PostgreSQL per account e auth peer; deduplica dei post per 10 minuti, serializzata. URL con slash finale usano la stessa quota. Nessuna fiducia in X-Forwarded-For.
-- Log di errore con sole classi tecniche: nessun errore grezzo pgx/S3, path, query o credenziale.
-- Export ZIP reale con `data.json` e immagini proprie, campi ammessi espliciti, password attuale e protezioni sessione/Origin/CSRF. Nessun hash/token/chiave S3 nel file.
-- Cancellazione account transazionale: pulizia immediata di identità/profilo/testi e relazioni, revoca sessioni/token, tombstone per preservare risposte altrui, coda durevole di eliminazione immagini.
-- Manutenzione all'avvio e ogni minuto: bozze 24h, singoli post eliminati 30 giorni, report chiusi/audit 180 giorni. Retry S3 persistenti; riconciliazione orfani oltre 24h via CLI.
-- Backup completo DB + volume SeaweedFS e restore isolato verificato con digest di tutte le righe e immagini. Script locale, ACL Windows e pulizia controllata delle proprie copie scadute.
-- Pagine responsive per dati account, report, moderazione e informazioni privacy dell'anteprima. Bozza privacy/DSA con fonti primarie, inventario dati e procedure da definire prima del lancio.
+- Migrazione **006** e rollback: coorti, inviti, audit inviti, membership/indicatori, trigger primi eventi e coda email persistente.
+- Registrazione su invito: token CSPRNG hashato, email vincolata, scadenza, revoca e consumo atomico; capienza 30–50 con prenotazione posti. Login degli account precedenti preservato.
+- Pannello moderatore `/moderation/beta`: configurazione, pausa/riapertura, creazione e revoca inviti, link mostrato una volta, ultimi 100, statistiche e code reali. Autorizzazione nel DB e Origin/CSRF; bootstrap CLI esplicito, nessun admin predefinito.
+- Form reale collegato: codice invito, frammento URL rimosso subito, stati config/caricamento/errore/pausa. Shell aggiornata alla beta, layout desktop/tablet/mobile preservato.
+- Indicatori pilota: email verificata, attivazione, primo follow/post/interazione, D7 su finestra completa. Account preesistenti e coorti `e2e-*`/`load-*` esclusi. Nessun dato pilota inventato.
+- Export dei propri indicatori e cancellazione di membership/inviti/job personali. Retention inviti 30 giorni dopo scadenza/revoca, intenti email 24h. Informazioni privacy e inventario tecnico aggiornati.
+- Remediation email: PostgreSQL, lease, ack condizionato al tentativo proprietario, retry/backoff e limite 32 pendenti. Test riavvio e perdita di lease; niente link in chiaro nei job.
+- Metriche Prometheus protette, label limitate ai pattern di rotta; contatori, latenze, DB/goroutine/code. Monitor locale con retention 7 giorni e cinque allarmi; nessuna notifica esterna.
+- Remediation monitor: annullamenti client classificati 499, scadenze 504; panic reali ancora contati 500. Dopo la correzione, regressione browser con **zero serie 5xx** e annullamenti separati.
+- HTTPS Caddy locale con CA interna, cookie `__Host-` Secure/HttpOnly, origine HTTPS esatta. Corretto il matcher redirect per escludere l’healthcheck. Certificato pubblico esportato; nessuna modifica automatica alle autorità Windows.
+- Carico sintetico riproducibile con 50 utenti, quote attive, soglie e cleanup tramite API. Workflow CI aggiornati nella root Git effettiva e nel template interno, con test delle regole monitor.
 
 ## File creati principali
 
 ```text
-services/api/migrations/005_safety_privacy.{up,down}.sql
-services/api/db/queries/safety.sql
-services/api/internal/safety/guard.go
-services/api/internal/moderation/service.go
-services/api/internal/privacy/{service,maintenance}.go
-services/api/internal/backup/manifest.go
-services/api/internal/httpapi/{safety.go,sprint5_integration_test.go}
-services/api/internal/db/safety.sql.go
-apps/web/src/components/safety/{settings-nav,report-button,account-settings,reports-view}.tsx
-apps/web/src/components/safety/safety.module.css
-apps/web/src/app/{moderation,privacy}/page.tsx
-apps/web/src/app/settings/{account,reports}/page.tsx
-apps/web/tests/safety.spec.ts
-infra/restore.compose.yaml
-scripts/backup-verify.ps1
-docs/architecture/sprint-5.md
-docs/reverse-engineering/sprint-5-matrix.md
-docs/security/sprint-5-review.md
-docs/legal/privacy-dsa-review.md
-docs/operations/backup-restore.md
-docs/implementation-status-sprint-4.md
+services/api/migrations/006_private_beta.{up,down}.sql
+services/api/internal/beta/service.go
+services/api/internal/monitoring/metrics.go
+services/api/internal/auth/mail_queue.go
+services/api/internal/httpapi/{beta.go,sprint6_integration_test.go}
+apps/web/src/app/moderation/beta/page.tsx
+apps/web/src/components/safety/beta-dashboard.tsx
+apps/web/tests/{beta,https}.spec.ts
+playwright.https.config.ts
+infra/{https.compose.yaml,Caddyfile.local}
+infra/monitoring/{prometheus.yaml,alerts.yaml,alerts.test.yaml}
+scripts/{prepare-sprint6,start-local-beta}.ps1
+scripts/load-test.mjs
+docs/testing/load-sprint-6.json
+docs/architecture/sprint-6.md
+docs/operations/local-beta.md
+docs/security/sprint-6-review.md
+docs/reverse-engineering/sprint-6-matrix.md
+docs/implementation-status-sprint-5.md
 ```
 
-File aggiornati: server/CLI e router, auth DTO/query/repository, lock delle scritture social/post/media, storage S3, runner/sqlc e query generate, card/profilo/navigazione/impostazioni, client API, test rollback Sprint 3/4, README e `.env.example`. Script format delimitati alle cartelle sorgenti per evitare l'accesso ai backup privati. Workflow aggiornati sia nella root Git effettiva `../.github/workflows/radura-ci.yml` sia nel template interno.
+Aggiornati inoltre server/CLI/router, auth/repository/worker, privacy/retention, sqlc/modelli generati, runner migrazioni, form/shell/settings/CSS, helper E2E, test errori e rollback Sprint 5, Compose, `.env.example`, `.gitignore`, package scripts, README, inventario privacy e procedura backup. Nessun servizio cloud o funzione fuori roadmap.
 
 ## Nuovi endpoint funzionanti
 
-| Endpoint                                         | Comportamento                                    |
-| ------------------------------------------------ | ------------------------------------------------ |
-| `POST /api/v1/reports`                           | Crea/riceve report aperto, 201 con ID            |
-| `GET /api/v1/reports`                            | Solo report propri, filtro e cursore             |
-| `GET /api/v1/moderation/reports`                 | Coda riservata ai moderatori                     |
-| `POST /api/v1/moderation/reports/{id}/decisions` | Decisione motivata e audit atomici, 204          |
-| `GET /api/v1/moderation/audit`                   | Registro riservato paginato                      |
-| `POST /api/v1/account/export`                    | Password attuale → ZIP privato                   |
-| `DELETE /api/v1/account`                         | Password + ELIMINA → cancellazione e revoca, 204 |
+| Metodo/percorso                               | Accesso/risultato                              |
+| --------------------------------------------- | ---------------------------------------------- |
+| GET `/api/v1/beta`                            | Pubblico: obbligo invito e stato ingressi      |
+| GET `/api/v1/moderation/beta`                 | Moderatore: metriche pilota e operazioni       |
+| PATCH `/api/v1/moderation/beta`               | Moderatore + Origin/CSRF: capienza/pausa → 204 |
+| GET `/api/v1/moderation/beta/invites`         | Moderatore: ultimi 100, nessun token/hash      |
+| POST `/api/v1/moderation/beta/invites`        | Moderatore + Origin/CSRF: emissione → 201      |
+| DELETE `/api/v1/moderation/beta/invites/{id}` | Moderatore + Origin/CSRF: revoca → 204         |
+| GET `/metrics` sulla API interna              | Bearer dedicato; dal gateway sito → 404        |
 
-Tutti richiedono sessione. Mutazioni con JSON, origine esatta e header CSRF; 403 per ruolo/password insufficienti, 404 per target indisponibile, 409 per stato concorrente/spam, 422 per validazioni, 429 con Retry-After per quota. Endpoint Sprint 1–4 preservati.
+Auth, profili, social, post, feed, immagini, ricerca, notifiche, report/moderazione ed export/delete precedenti restano reali e coperti dalle regressioni. `GET /healthz` interno verifica DB/schema/S3.
 
-## Verifiche eseguite ed esiti reali
+## Test e risultati effettivi
 
-| Verifica                                               | Esito                                                                                                                                                                                                                    |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `sqlc generate` e `gofmt`                              | Query generate e Go formattato                                                                                                                                                                                           |
-| `go vet ./...`                                         | Pass                                                                                                                                                                                                                     |
-| `go test -count=1 -json ./...` con PostgreSQL/S3 reali | **37 test principali + 31 sottocasi passati; 0 test saltati; 0 fallimenti**                                                                                                                                              |
-| Build Go nativa e immagini API/migrate                 | Pass                                                                                                                                                                                                                     |
-| `npm run format:check`, `typecheck`, `lint`            | Pass, nessun warning ESLint nel lint                                                                                                                                                                                     |
-| Build Next nativa e Docker                             | Pass; nuove route incluse                                                                                                                                                                                                |
-| `E2E_AUTH=1 E2E_MAILPIT=1 npm run test:smoke`          | **39/39 pass**, desktop/tablet/mobile, **1,7 minuti**                                                                                                                                                                    |
-| Avvio Compose e migrazioni                             | DB/storage/mailpit/API/web sani; migrate exit 0; schema **5**                                                                                                                                                            |
-| Backup/restore completo                                | **Pass: 16 tabelle, 1.117 righe, 13 immagini S3**, conteggi/digest identici; copia `.local/backups/sprint5/20261018T154252Z_3814de87`, ricevuta `verified.json`. Due prove complete riuscite, volumi temporanei rimossi. |
-| Sintassi script PowerShell                             | Pass                                                                                                                                                                                                                     |
-| Diff whitespace e specifiche                           | `git diff --check` pass; AGENTS/PROJECT_SPEC/CODEX_START_PROMPT invariati                                                                                                                                                |
+| Verifica                                                           | Esito                                                                                                |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| Go format, sqlc generate, go vet, build Windows e Docker           | Passati                                                                                              |
+| `go test -count=1 -json ./...` Windows                             | **45 test principali + 31 sottocasi passati, 0 falliti/saltati**                                     |
+| Stessa suite Linux Docker con `go test -race -count=1 -json ./...` | **45 + 31 passati, 0 falliti/saltati, nessuna race rilevata**                                        |
+| Prettier, TypeScript, ESLint                                       | Passati, compreso controllo finale della documentazione                                              |
+| Build Next di produzione in Docker                                 | Passata, compresa `/moderation/beta`                                                                 |
+| Playwright completo HTTP, API/PG/S3/SMTP reali                     | **42/42 passati**, tre viewport, ultima esecuzione 2,9 minuti                                        |
+| Playwright HTTPS locale                                            | **3/3 passati**, tre viewport, 17,9 secondi                                                          |
+| CA e hostname Node con `rejectUnauthorized: true`                  | Passati; cookie Secure/HttpOnly/SameSite/Path, redirect, persistenza, post, CSRF e revoca verificati |
+| Compose, Caddy validate, stack HTTP/HTTPS                          | Passati dopo correzione matcher healthcheck                                                          |
+| Promtool configurazione e cinque regole                            | Passati; tre scenari sintetici di allarme passati                                                    |
+| Target Prometheus reale                                            | `radura` UP=1 verificato                                                                             |
+| `npm audit --omit=dev`                                             | **0 vulnerabilità segnalate**; solo dipendenze npm di produzione                                     |
+| Backup/restore schema 006 + S3                                     | Passato: digest identici, 21 tabelle, 2.008 righe, 19 immagini                                       |
 
-Test backend nuovi: autorizzazione/CSRF e privacy dei report, due decisioni concorrenti con audit unico, ripristino/sospensione/revoca ruolo, filtri sui contenuti e media, ZIP con immagini e assenza di dati di autenticazione, password errata, erasure con risposte altrui preservate, guasto DELETE S3 e retry durevole, scadenza bozze e retention post, orphan cleanup con grazia, quota persistente fra istanze, deduplica concorrente, scritture già autenticate bloccate dalla cancellazione e log con sentinelle sensibili.
+Test nuovi: invito assente/email errata/scaduto/revocato/riusato; conflitto non consuma il codice; consumo concorrente unico; ultimo posto non sovraprenotato; ruoli e CSRF; eventi primi passi e D7 con orologio DB modificato solo nello schema isolato; esclusione test; rollback preserva identità/sessioni; export/delete nuovi dati; SMTP fallito con ripresa da nuovo worker; ack obsoleto non elimina una lease nuova; metriche senza valori privati e panic effettivamente contati.
 
-Playwright usa API/PG/S3/SMTP reali e crea esclusivamente account sintetici. Il ruolo moderatore di ciascun test è revocato; verificato **0 moderatori di test residui**. Screenshot nuovi account/moderazione prodotti nelle tre viewport; ispezionati anche visivamente su mobile e desktop. Report HTML in `playwright-report`, screenshot/export sintetici in `test-results`, output Go in `.local/go-test-sprint5.jsonl`; tutti ignorati da Git.
+Gli screenshot del pannello desktop/mobile sono stati ispezionati. Screenshot, trace, export di test, CA e log grezzi restano locali/ignorati. Le prove backend usano schemi isolati in `radura_test` e bucket `radura-tests`, senza rollback o azzeramento del database attivo.
 
-Problemi emersi e risolti: tre regressioni iniziali dei contratti/rollback e ordine di validazione media; nomi accessibili dei select corretti dopo timeout E2E; interruzione di una prima prova browser sovrapposta alla pausa backup, poi prove separate; format inizialmente impedito dall'ACL dei backup, corretto usando glob sulle sole sorgenti. La suite finale sopra è passata senza retry applicativi fittizi o limiti disabilitati. Gli helper rispettano Retry-After reale.
+## Carico locale misurato
 
-### Pulizia manuale autorizzata sui dati correnti
+Rapporto aggregato: `docs/testing/load-sprint-6.json`, UTC 2026-10-18 17:54:31. Prova HTTP loopback, non contemporanea agli E2E o al backup; setup/cleanup fuori dai percentili.
 
-Il **18 ottobre 2026 alle 18:48 Europe/Rome**, dopo l'autorizzazione esplicita dell'utente, eseguiti entrambi i comandi sullo stack persistente corrente. La precedente richiesta era stata bloccata dalla revisione automatica; la successiva esecuzione è avvenuta con l'approvazione del gestore.
+- **50 utenti sintetici concorrenti**, circa una richiesta per utente al secondo; feed/dettaglio/profilo/like.
+- **1.489 richieste in 30,93s**, **48,15 richieste/s**.
+- Latenza client **p50 26,43ms · p95 48,33ms · p99 61,75ms**.
+- **1.489 risposte 200, zero 429/5xx/errori rete**. Soglie dichiarate rispettate.
+- **50/50 account creati eliminati via API** con la propria password; nessun account preesistente cancellato. Coorte di test esclusa dalle metriche pilota; tombstone secondo la politica esistente.
+- È una misura di carico moderato di questa macchina, non un benchmark di saturazione né una garanzia per 50 persone su Internet.
 
-| Verifica                   | Esito reale                                                          |
-| -------------------------- | -------------------------------------------------------------------- |
-| `/api -maintenance`        | Exit 0; immagini eliminate **0**, eliminazioni media in attesa **0** |
-| `/api -reconcile-media`    | Exit 0; oggetti S3 orfani eliminati **0**                            |
-| `/api -healthcheck`        | Exit 0                                                               |
-| Stato Compose dopo pulizia | DB, storage, Mailpit, API e web tutti healthy                        |
-| Smoke HTTP dopo pulizia    | Home e `/privacy`: 200; `/api/v1/auth/me` senza sessione: 401 atteso |
+## Limiti e attività non svolte
 
-I contatori dei comandi riguardano gli oggetti media; non quantificano la pulizia dei record tecnici scaduti nel database.
+- Nessun dominio/server pubblico: solo loopback. Persone su altri dispositivi non possono accedere in questa configurazione.
+- Nessun reclutamento/invio inviti a terzi; piloti umani e retention D7 reale **ancora da osservare**. Il polling autenticato può contribuire al ritorno D7: indicatore tecnico, non prova di attenzione umana.
+- CA Windows non installata: il browser può mostrare un avviso finché il gestore non importa manualmente il certificato pubblico. Chromium ignora soltanto la CA privata nella configurazione TLS locale; Node verifica catena e hostname realmente.
+- Mailpit è una casella privata locale, non un SMTP di consegna esterno. At-least-once può duplicare un invio dopo crash; vale soltanto il link più recente. Quote conservativamente condivise dai browser dietro Next.
+- Allarmi visibili in Prometheus, senza recapito esterno. Nessuna simulazione di carico distribuito, pentest indipendente o promessa di capacità produttiva.
+- CI aggiornata ma pipeline remota **non eseguita**: nessun push autorizzato. Race detector eseguito realmente in Linux locale.
+- Restano revisione giuridica, contatti/canali pubblici, ripristino assistito con cancellazioni successive al backup e altri limiti operativi già documentati. Nessun claim di conformità legale.
+- Nessun commit/deploy esterno, DM, ActivityPub, microservizi o acquisto.
 
-## Limiti e attività successive
+## Avvio e prossimo passo
 
-- **Nessuna dichiarazione di conformità o prontezza pubblica.** Titolare, contatti, basi giuridiche, notice esterne, comunicazioni agli autori e ricorsi da definire con consulenza. Account sospesi richiedono assistenza esterna al login ordinario.
-- Export automatico limitato a 100 MiB immagini/32 MiB JSON/10.000 righe per categoria, oltre limite 413 e gestione assistita da predisporre. Un crash può lasciare un ZIP temporaneo da rimuovere operativamente.
-- Tombstone/UUID e parte di report/audit restano pseudonimi; i testi liberi richiedono minimizzazione e revisione. Report aperti richiedono esame umano.
-- Backup privati locali, senza cifratura automatica o copia fuori macchina. Retention dei backup gestita al successivo comando riuscito; dump manuali esclusi. Manca un registro esterno durevole per riapplicare cancellazioni dopo un vero disaster recovery.
-- Quote peer Next condivise, antispam essenziale, nessun CAPTCHA/MFA. Coda email non durevole e verifica email non obbligatoria nell'anteprima.
-- CI aggiornata ma **non eseguita su GitHub**; race detector Linux configurato, non eseguito nella shell Windows. Nessun penetration test indipendente, load test o deploy effettuato.
+```powershell
+# Dalla directory twitter-revival-codex, Docker Desktop attivo:
+./scripts/start-local-beta.ps1
+# Ricompilare quando cambia il codice:
+./scripts/start-local-beta.ps1 -Build
+```
 
-Prossimo passo operativo: il gestore sceglie un proprio handle esistente e assegna il ruolo con `docker compose exec api /api -role-user HANDLE -role moderator -reason "Assegnazione approvata dal gestore locale."`, poi prova `/moderation`. Concordare la revisione dei limiti sopra prima di autorizzare lo Sprint 6. Il sito rimane su **http://localhost:3000**, Mailpit su **http://localhost:8025**.
+Sito **https://localhost:3443**, monitor **http://localhost:9090**, email locale **http://localhost:8025**. Comandi completi per invito iniziale, ruolo moderatore, CA, test e stop conservando i dati nel README e in `docs/operations/local-beta.md`.
+
+Prossimo passo operativo: scegliere l’account moderatore del gestore, accedere su HTTPS e creare il primo invito personale. Pilotaggio umano ed eventuale accesso esterno richiedono attività successive esplicite; nessuna feature futura aggiunta automaticamente.
+
+Stato finale verificato: sette servizi sani su loopback, schema 6, Prometheus UP=1, HTTPS con CA verificata anche dopo il riavvio del backup. Coorte pilot: 0 membri e 0 inviti attivi; coda email vuota. Backup verificato in .local/backups/sprint5/20261018T180137Z_3797165f, con rimozione dei soli container/volumi temporanei di restore.

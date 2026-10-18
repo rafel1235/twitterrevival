@@ -1,15 +1,57 @@
-# Radura · Sprint 5
+# Radura · Sprint 6 — beta locale a inviti
 
 Social indipendente, nome interno **Twitter Revival**. Brand, testi, icone SVG e illustrazioni CSS originali. Nessuna affiliazione con Twitter/X, nessuno scraping o asset proprietario. Account, profili, follow, blocchi, post e interazioni sono reali e persistenti. La home autenticata mostra il feed cronologico dei seguiti e i propri post. Senza accesso compare solo un'anteprima esplicitamente **Demo**.
 
-## Usare lo Sprint 5
+## Avvio della beta locale con HTTPS
+
+Dalla cartella `twitter-revival-codex`, con Docker Desktop avviato:
+
+```powershell
+./scripts/start-local-beta.ps1 -Build
+```
+
+Se `.env` non esiste, copiarlo una sola volta da `.env.example` e configurare password DB, `DATABASE_URL` e segreto S3. Se esiste, conservarlo. Lo script aggiunge solo `METRICS_TOKEN` se manca, preserva i segreti esistenti, applica la migrazione 006 e avvia Caddy e Prometheus su loopback. Avvii successivi: `./scripts/start-local-beta.ps1`. Non usare `down -v` sul progetto attivo.
+
+- **Sito: https://localhost:3443**. Richiede un nuovo accesso dopo il passaggio da HTTP.
+- **Monitor: http://localhost:9090** → Targets, query e Alerts. Metriche per 7 giorni, nessuna notifica esterna.
+- **Email di prova: http://localhost:8025**. Mailpit cattura le email localmente.
+- Caddy usa una CA locale. Lo script esporta soltanto il certificato pubblico `.local/caddy-root.crt`; nessuna autorità viene installata automaticamente. Per eliminare l’avviso del browser, importarlo manualmente fra le autorità radice attendibili dell’utente Windows, dopo averne verificato provenienza e impronta. Le chiavi rimangono nel volume privato Caddy. [Procedura e test TLS](docs/operations/local-beta.md).
+
+La configurazione HTTPS usa un’unica origine autorizzata: aprire il sito sulla porta 3443. La porta HTTP 3080 reindirizza a HTTPS; la 3000 resta disponibile per lo sviluppo, ma in questa modalità non è l’origine consentita alle mutazioni. Nessun dominio, tunnel, deploy pubblico o servizio a pagamento.
+
+**Inviti:** registrazione chiusa senza codice monouso legato all’email. Gli account esistenti continuano ad accedere. Per il primo invito o per assegnare il ruolo a un account esistente:
+
+```powershell
+docker compose exec api /api -invite-email persona@example.test
+docker compose exec api /api -role-user HANDLE_ESISTENTE -role moderator -reason "Gestione della beta locale autorizzata dal gestore."
+```
+
+Il primo comando mostra il token una sola volta: usarlo nel campo **Codice invito**, custodirlo privatamente. Dopo l’assegnazione, ricaricare la pagina e aprire **Impostazioni → Beta e inviti** (`/moderation/beta`): capienza 30–50, pausa/riapertura, inviti, revoca e statistiche. Il link privato usa un frammento URL rimosso subito dal form; non viene inviato automaticamente via email. Perdere il token richiede revocare l’invito e crearne uno nuovo.
+
+La beta è predisposta per i piloti; **non sono stati reclutati utenti reali né misurata retention reale**. Account precedenti e coorti sintetiche sono esclusi dagli indicatori. D7 resta «Non ancora misurabile» fino a maturazione della finestra. [Definizioni e procedura operativa](docs/architecture/sprint-6.md).
+
+## Endpoint aggiunti nello Sprint 6
+
+| Metodo e percorso                             | Risultato                                                  |
+| --------------------------------------------- | ---------------------------------------------------------- |
+| `GET /api/v1/beta`                            | Configurazione pubblica: invito richiesto, ingressi aperti |
+| `GET /api/v1/moderation/beta`                 | Indicatori piloti e stato operativo, solo moderatore       |
+| `PATCH /api/v1/moderation/beta`               | `{capacity,enrollment_open}` → 204                         |
+| `GET /api/v1/moderation/beta/invites`         | Ultimi 100 inviti piloti, senza token                      |
+| `POST /api/v1/moderation/beta/invites`        | `{email,days}` → 201 con token mostrato una volta          |
+| `DELETE /api/v1/moderation/beta/invites/{id}` | `{}` → 204, revoca idempotente                             |
+| `GET /metrics` sulla API interna              | Prometheus, bearer `METRICS_TOKEN`; non esposto dal sito   |
+
+Gli endpoint degli sprint precedenti sono conservati e verificati dalla suite completa.
+
+## Funzioni disponibili
 
 - **Segnala post/profilo**: apri il controllo sotto un contenuto altrui, scegli motivo e dettagli; l'esito compare in **Impostazioni → Segnalazioni**.
 - **Moderazione** (`/moderation`): coda, oscuramento/ripristino post, sospensione/riattivazione account e audit. Ruolo assegnato solo con CLI locale esplicita, vedi sotto.
 - **Impostazioni → I tuoi dati**: ZIP reale con JSON e immagini, oppure cancellazione definitiva confermata da password e parola ELIMINA. Nessun dato simulato.
 - **Backup e restore**: `./scripts/backup-verify.ps1` prova una copia isolata di database e storage; nessun restore sui dati attivi. I tempi tecnici di conservazione sono spiegati in `/privacy` e nella documentazione.
 
-- Sito: **http://localhost:3000**. Gli account creati nello Sprint 1 restano validi.
+- Sito beta: **https://localhost:3443**; variante di sviluppo HTTP descritta sotto. Gli account creati negli sprint precedenti restano validi.
 - **Home dopo l'accesso**: pubblica fino a 280 code point Unicode. “Aggiorna” legge i nuovi post; “Carica altri post” prosegue con il cursore. Il feed include post propri e dei seguiti, risposte, citazioni e repost, in ordine cronologico.
 - **Post**: apri il testo/data per la conversazione; rispondi, metti/rimuovi mi piace, ripubblica/annulla repost o cita con un tuo commento. Puoi modificare solo il testo dei tuoi post ed eliminarli con conferma. I post restano dopo refresh/riavvio.
 - **Aggiungi immagine**: seleziona JPEG/PNG, descrivila e premi “Carica immagine”. Fino a quattro allegati con testo obbligatorio; recupero e cancellazione delle immagini in bozza anche dopo refresh.
@@ -22,7 +64,7 @@ Social indipendente, nome interno **Twitter Revival**. Brand, testi, icone SVG e
 
 Per provare due utenti, usare due browser/sessioni separate e aprire il profilo dell’altro account. Non esistono account amministratore o password universali predefiniti.
 
-## Avvio con Docker Compose
+## Variante di sviluppo HTTP con Docker Compose
 
 Prerequisiti: Docker Engine/Desktop con Compose v2 o successivo. Dalla directory che contiene questo README:
 
@@ -115,7 +157,7 @@ npm run start
 
 `004_discovery_media.up.sql` aggiunge media/post_media, notifiche con trigger/view, campo generato FTS e indice GIN. Conserva post e interazioni esistenti; nessun backfill delle notifiche storiche.
 
-Il runner incorpora SQL, registra `schema_migrations` e acquisisce un advisory lock transazionale. `up` applica le versioni pendenti; `down` annulla **solo l'ultima**. Versioni sconosciute/non contigue rifiutate. Il primo rollback annulla la 005: elimina report/audit/quote/ruoli e rimuove l'oscuramento, preservando account/post/media. Richiede il binario dello sprint precedente e API ferme; non recupera dati già cancellati dalla manutenzione. I successivi annullano 004, 003, 002 e 001 con perdita dei rispettivi dati. Salvare un backup prima:
+Il runner incorpora SQL, registra `schema_migrations` e acquisisce un advisory lock transazionale. `up` applica le versioni pendenti; `down` annulla **solo l'ultima**. Versioni sconosciute/non contigue rifiutate. Il primo rollback annulla la 006: elimina coorti, inviti, indicatori beta e intenti email, preservando account, sessioni, post, media e moderazione. Richiede API ferme e il binario dello sprint precedente; gli intenti email pendenti vanno gestiti prima del rollback. Non recupera dati già cancellati dalla manutenzione. I successivi annullano 005, 004, 003, 002 e 001 con perdita dei rispettivi dati. Salvare un backup prima:
 
 ```sh
 cd services/api
@@ -123,7 +165,7 @@ go run ./cmd/server -migrate=down
 go run ./cmd/server -migrate=up
 ```
 
-`citext` resta al rollback perché potrebbe essere condivisa. Query parametrizzate in `db/queries/`, codice tipizzato generato con **sqlc 1.31.1** in `internal/db`. Per rigenerare, da `services/api`: `sqlc generate`. API con schema versione **5**; healthcheck su DB/schema e S3. Test rollback su schemi isolati, senza azzerare il sito.
+`citext` resta al rollback perché potrebbe essere condivisa. Query parametrizzate in `db/queries/`, codice tipizzato generato con **sqlc 1.31.1** in `internal/db`. Per rigenerare, da `services/api`: `sqlc generate`. API con schema versione **6**; healthcheck su DB/schema e S3. Test rollback su schemi isolati, senza azzerare il sito.
 
 ## Contratto HTTP
 
@@ -137,7 +179,7 @@ go run ./cmd/server -migrate=up
 
 Successi auth: `{"data":{"user":{"id":"uuid","handle":"ada","email":"ada@example.test","display_name":"Ada","created_at":"ISO-8601 UTC"}}}`. Errori: `{"error":{"code":"validation_failed","message":"Controlla i dati inseriti.","fields":{"handle":"..."}}}`. Nessun hash, token o dettaglio interno nel JSON. `fields` è opzionale. `logout` non ha body di risposta.
 
-Registrazione: `handle`, `email`, `display_name`, `password`. Login: `email`, `password`. Logout: `{}`. Mutazioni con `Content-Type: application/json` (upload: multipart), `X-CSRF-Protection: 1` e `Origin` uguale ad `APP_ORIGIN` (fallback Referer solo se Origin manca). Origin non valido/metadata cross-site: 403; tipo errato 415; JSON/campi ignoti 400; body JSON oltre 8 KiB 413; validazione 422; quota 429 con Retry-After; saturazione 503. Limite multipart distinto descritto sotto.
+Registrazione: `handle`, `email`, `display_name`, `password`, `invite_token`. Login: `email`, `password`. Logout: `{}`. Invito assente/errato/scaduto/usato o ingresso in pausa al preflight: 403; capienza/stato cambiato durante la transazione: 409. Mutazioni con `Content-Type: application/json` (upload: multipart), `X-CSRF-Protection: 1` e `Origin` uguale ad `APP_ORIGIN` (fallback Referer solo se Origin manca). Origin non valido/metadata cross-site: 403; tipo errato 415; JSON/campi ignoti 400; body JSON oltre 8 KiB 413; validazione 422; quota 429 con Retry-After; saturazione 503. Richiesta annullata dal client: 499 tecnico; scadenza: 504. Limite multipart distinto descritto sotto.
 
 Esempio da shell, API locale:
 
@@ -269,9 +311,9 @@ Compose include Mailpit **1.31.6**, con interfaccia HTTP su loopback 8025 e SMTP
 
 La registrazione accoda un link di verifica. I token hanno 32 byte casuali, hash SHA-256 nel DB, purpose specifico e uso singolo: 24 ore per verifica, 1 ora per reset. Massimo un nuovo token al minuto per account e tipo. Un nuovo invio invalida i precedenti. La conferma richiede un POST esplicito: aprire il link non lo consuma. Token esclusi dalle risposte API, dai log applicativi e dallo storage client; Referrer-Policy no-referrer, URL ripulito dopo il successo.
 
-Il recupero accoda il lavoro prima del lookup dell’email, così account noti e ignoti ricevono lo stesso messaggio e percorso HTTP. Coda interna limitata a 32 richieste, timeout SMTP e cooldown nel DB. Il reset revoca tutte le sessioni e impedisce a un login concorrente con la vecchia password di crearne una nuova. Non effettua login automatico dopo il cambio.
+Il recupero accoda il lavoro prima del lookup dell’email, così account noti e ignoti ricevono lo stesso messaggio e percorso HTTP. Coda PostgreSQL limitata a 32 richieste pendenti, timeout SMTP e cooldown nel DB. Intenti durevoli, lease e massimo 5 tentativi con backoff; nessun token in chiaro nei job. Il reset revoca tutte le sessioni e impedisce a un login concorrente con la vecchia password di crearne una nuova. Non effettua login automatico dopo il cambio.
 
-**Limite noto:** la coda email non è durevole. Un riavvio può perdere richieste pendenti; richiedere un nuovo link dopo il cooldown. Errori di consegna vengono registrati senza dati sensibili. Per la beta servono consegna/retry durevoli e SMTP appropriato. SMTP autenticato richiede STARTTLS; con origin HTTPS STARTTLS è obbligatorio e i certificati vengono verificati. La verifica email è disponibile ma non ancora obbligatoria per login e connessioni nell’anteprima locale.
+La coda email sopravvive ai riavvii. Errori di consegna vengono registrati senza dati sensibili; tentativi esauriti compaiono nel monitor, una nuova richiesta riattiva il job. Gli intenti scadono dopo 24 ore. La consegna SMTP è almeno una volta: un arresto dopo l’invio può produrre un nuovo link, invalidando quello precedente. SMTP autenticato richiede STARTTLS; HTTPS lo richiede salvo l’eccezione esplicita e limitata a `localhost` + `mailpit:1025` dell’overlay locale. La verifica email è disponibile e parte della metrica di attivazione, ma non è obbligatoria per login e connessioni nell’anteprima locale.
 
 ## Sicurezza
 
@@ -279,7 +321,7 @@ Il recupero accoda il lavoro prima del lookup dell’email, così account noti e
 - Password: almeno 12 code point Unicode, massimo 128 byte UTF-8, mai normalizzate o troncate. Handle normalizzati lowercase: 3–20 caratteri ASCII `[A-Za-z0-9_]`. Nome visualizzato: 1–50 code point. Email validate e normalizzate lowercase.
 - Token CSPRNG 32 byte, Base64URL; **solo SHA-256 del token nel DB**. Cookie HttpOnly, Path=/, SameSite=Lax, durata 168 ore configurabile (1–720). In HTTPS: Secure e nome `__Host-radura_session`, senza Domain. HTTP non-loopback e combinazioni cookie/origin insicure vengono rifiutati alla partenza.
 - SameSite, origin esatto, Fetch Metadata e header custom anti-CSRF; nessun CORS aperto. Errori uniformi; `Cache-Control: no-store`; limiti body, header e timeout; nessuna credenziale nei log applicativi.
-- Rate limit auth 30 mutazioni/minuto per **peer TCP**, memoria limitata a 4096 bucket. Non si fida di `X-Forwarded-For`. Dietro la rewrite Next i browser condividono la quota del proxy: limite conservativo da riprogettare con proxy fidato e quota per account prima della beta. Contatore locale al processo, azzerato al riavvio.
+- Rate limit auth 30 mutazioni/minuto per **peer TCP**, memoria limitata a 4096 bucket e contatore PostgreSQL persistente, anche su verifica/reset. Non si fida di `X-Forwarded-For`. Dietro la rewrite Next i browser condividono la quota del proxy: limite conservativo noto della beta locale; un futuro servizio esterno richiederà una strategia con proxy fidato.
 
 Le mutazioni social hanno quota separata di 60/minuto per peer; verifica e recupero 10/minuto. Valgono lo stesso limite di body, origin esatto e header anti-CSRF. Follow e blocchi sono serializzati nel DB mediante advisory lock della coppia; lo sblocco non ripristina relazioni. La sessione del frontend viene invalidata su 401 e le risposte precedenti a logout/reset non possono ripristinare un utente in cache.
 
@@ -354,6 +396,8 @@ services/api/internal/moderation/ report, decisioni, audit e CLI ruoli
 services/api/internal/privacy/    ZIP, cancellazione e purge durevole
 services/api/internal/safety/     lock account e quote persistenti
 services/api/internal/backup/     manifest SHA-256 di tabelle e immagini
+services/api/internal/beta/       inviti, capienza e indicatori piloti
+services/api/internal/monitoring/ metriche Prometheus senza dati personali
 services/api/internal/mailer/     invio SMTP con timeout e STARTTLS
 services/api/internal/httpapi/    handler, CSRF, rate limit, test
 services/api/internal/db/         query Go generate da sqlc
@@ -363,7 +407,11 @@ docs/                            architettura, provenienza UI, stato verifiche
 .github/workflows/ci.yml          pipeline
 compose.yaml                     db/storage/mailpit → migrate → api → web
 infra/restore.compose.yaml       copia isolata per verifica restore
+infra/https.compose.yaml         Caddy e HTTPS locale
+infra/monitoring/                scraping, allarmi e test delle regole
 scripts/backup-verify.ps1         snapshot, restore e verifica locale
+scripts/start-local-beta.ps1      avvio HTTPS e monitoraggio locale
+scripts/load-test.mjs             carico sintetico e cleanup tramite API
 ```
 
-Esiti e file dello Sprint 5 nel [registro](docs/implementation-status.md), politiche nell'[architettura Sprint 5](docs/architecture/sprint-5.md). Il prossimo incremento è Sprint 6 (beta a inviti), solo su richiesta: nessun deploy, servizio a pagamento o funzione futura presentata come pronta.
+Esiti e file dello Sprint 6 nel [registro](docs/implementation-status.md), protocollo beta nell’[architettura](docs/architecture/sprint-6.md), comandi HTTPS/monitoraggio/carico nella [procedura locale](docs/operations/local-beta.md). Restano da svolgere reclutamento dei piloti e osservazione reale D7; l’installazione rimane locale.

@@ -13,7 +13,11 @@ export function SettingsNav() {
     ["/settings/account", "I tuoi dati"],
     ["/settings/reports", "Segnalazioni"],
   ];
-  if (user?.role === "moderator") links.push(["/moderation", "Moderazione"]);
+  if (user?.role === "moderator")
+    links.push(
+      ["/moderation", "Moderazione"],
+      ["/moderation/beta", "Beta e inviti"],
+    );
   return (
     <nav className={styles.nav} aria-label="Impostazioni e sicurezza">
       {links.map(([href, label]) => (

@@ -19,6 +19,12 @@ func (s *Server) requireUser(next http.Handler) http.Handler {
 			return
 		}
 		r = r.WithContext(context.WithValue(r.Context(), userContextKey{}, user))
+		if s.beta != nil {
+			if err = s.beta.Activity(r.Context(), user.ID); err != nil {
+				s.handleError(w, err)
+				return
+			}
+		}
 		next.ServeHTTP(w, r)
 	})
 }

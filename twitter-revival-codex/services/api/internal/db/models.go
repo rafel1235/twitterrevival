@@ -18,6 +18,46 @@ type AuthToken struct {
 	CreatedAt  pgtype.Timestamptz
 }
 
+type BetaCohort struct {
+	Slug           string
+	Kind           string
+	Capacity       int32
+	EnrollmentOpen bool
+	CreatedAt      pgtype.Timestamptz
+}
+
+type BetaInvite struct {
+	ID         string
+	CohortSlug string
+	Email      string
+	TokenHash  []byte
+	IssuerID   pgtype.UUID
+	ExpiresAt  pgtype.Timestamptz
+	UsedAt     pgtype.Timestamptz
+	UsedBy     pgtype.UUID
+	RevokedAt  pgtype.Timestamptz
+	CreatedAt  pgtype.Timestamptz
+}
+
+type BetaInviteEvent struct {
+	ID        string
+	InviteID  string
+	ActorID   pgtype.UUID
+	Action    string
+	CreatedAt pgtype.Timestamptz
+}
+
+type BetaMember struct {
+	UserID             string
+	CohortSlug         string
+	JoinedAt           pgtype.Timestamptz
+	LastSeenAt         pgtype.Timestamptz
+	FirstFollowAt      pgtype.Timestamptz
+	FirstPostAt        pgtype.Timestamptz
+	FirstInteractionAt pgtype.Timestamptz
+	ReturnedD7At       pgtype.Timestamptz
+}
+
 type Block struct {
 	BlockerID string
 	BlockedID string
@@ -34,6 +74,17 @@ type Like struct {
 	UserID    string
 	PostID    string
 	CreatedAt pgtype.Timestamptz
+}
+
+type MailJob struct {
+	ID          string
+	UserID      pgtype.UUID
+	Email       string
+	Purpose     string
+	Attempts    int32
+	AvailableAt pgtype.Timestamptz
+	LeasedUntil pgtype.Timestamptz
+	CreatedAt   pgtype.Timestamptz
 }
 
 type Medium struct {

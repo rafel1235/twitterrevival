@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -17,10 +18,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"radura.local/api/internal/auth"
 	"radura.local/api/internal/backup"
+	"radura.local/api/internal/beta"
 	"radura.local/api/internal/httpapi"
 	"radura.local/api/internal/mailer"
 	"radura.local/api/internal/media"
 	"radura.local/api/internal/moderation"
+	"radura.local/api/internal/monitoring"
 	"radura.local/api/internal/notifications"
 	"radura.local/api/internal/posts"
 	"radura.local/api/internal/privacy"
@@ -44,6 +47,9 @@ func run() error {
 	maintenance := flag.Bool("maintenance", false, "run privacy retention and media purge once")
 	reconcile := flag.Bool("reconcile-media", false, "remove S3 orphans older than 24 hours")
 	manifest := flag.Bool("backup-manifest", false, "print read-only database and S3 SHA-256 verification manifest")
+	inviteEmail := flag.String("invite-email", "", "issue one email-bound beta invite; prints token once")
+	inviteCohort := flag.String("invite-cohort", "pilot", "pilot or a local e2e-/load- cohort")
+	testCohort := flag.Bool("test-cohort", false, "local-only cohort excluded from pilot metrics")
 	flag.Parse()
 	addr := env("API_ADDR", "127.0.0.1:8080")
 	if *healthcheck {
@@ -85,6 +91,24 @@ func run() error {
 	if *migrate != "" {
 		return migrations.Run(ctx, pool, *migrate)
 	}
+	origin := env("APP_ORIGIN", "http://localhost:3000")
+	u, e := url.Parse(origin)
+	localOrigin := e == nil && (u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || u.Hostname() == "::1")
+	inviteOnly, err := strconv.ParseBool(env("BETA_INVITE_ONLY", "true"))
+	if err != nil {
+		return errors.New("invalid BETA_INVITE_ONLY")
+	}
+	if !localOrigin && !inviteOnly {
+		return errors.New("public origins require invite-only beta")
+	}
+	betaService := &beta.Service{Pool: pool, RequireInvite: inviteOnly, AllowTestCohorts: localOrigin}
+	if *inviteEmail != "" {
+		result, err := betaService.IssueLocal(ctx, *inviteCohort, *testCohort, beta.Input{Email: *inviteEmail})
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(result)
+	}
 	moderators := &moderation.Service{Pool: pool}
 	if *roleHandle != "" || *role != "" {
 		return moderators.SetRole(ctx, *roleHandle, *role, *reason)
@@ -98,7 +122,7 @@ func run() error {
 		return errors.New("invalid COOKIE_SECURE")
 	}
 	duration := time.Duration(ttl) * time.Hour
-	service, err := auth.NewService(&auth.PostgresRepository{Pool: pool}, duration)
+	service, err := auth.NewService(&auth.PostgresRepository{Pool: pool, Beta: betaService}, duration)
 	if err != nil {
 		return err
 	}
@@ -149,12 +173,15 @@ func run() error {
 		}
 		return storage.Ready(ctx)
 	}
-	origin := env("APP_ORIGIN", "http://localhost:3000")
 	startTLS, err := strconv.ParseBool(env("SMTP_STARTTLS", "false"))
 	if err != nil {
 		return errors.New("invalid SMTP_STARTTLS")
 	}
-	if secure && !startTLS {
+	localMail, err := strconv.ParseBool(env("SMTP_ALLOW_LOCAL_PLAINTEXT", "false"))
+	if err != nil {
+		return errors.New("invalid SMTP_ALLOW_LOCAL_PLAINTEXT")
+	}
+	if secure && !startTLS && !(localOrigin && localMail && env("SMTP_ADDR", "127.0.0.1:1025") == "mailpit:1025") {
 		return errors.New("SMTP_STARTTLS is required with HTTPS")
 	}
 	sender, err := mailer.NewSMTP(env("SMTP_ADDR", "127.0.0.1:1025"), env("SMTP_FROM", "Radura <no-reply@radura.test>"), os.Getenv("SMTP_USERNAME"), os.Getenv("SMTP_PASSWORD"), startTLS)
@@ -164,7 +191,12 @@ func run() error {
 	accounts := auth.NewAccountService(&auth.PostgresRepository{Pool: pool}, service, sender, origin)
 	profiles := users.NewService(&users.Repository{Pool: pool})
 	postService := posts.NewService(&posts.Repository{Pool: pool})
-	handler, err := httpapi.New(service, httpapi.Config{Origin: origin, CookieSecure: secure, SessionTTL: duration}, healthy, httpapi.WithUsers(profiles), httpapi.WithAccounts(accounts), httpapi.WithPosts(postService), httpapi.WithMedia(media.NewService(&media.Repository{Pool: pool, Store: storage})), httpapi.WithNotifications(notifications.NewService(pool)), httpapi.WithSafety(moderators, privacyService, &safety.Guard{Pool: pool}))
+	metricsToken := os.Getenv("METRICS_TOKEN")
+	if metricsToken != "" && len(metricsToken) < 32 {
+		return errors.New("METRICS_TOKEN must have at least 32 characters")
+	}
+	metrics := monitoring.New(pool, metricsToken)
+	handler, err := httpapi.New(service, httpapi.Config{Origin: origin, CookieSecure: secure, SessionTTL: duration}, healthy, httpapi.WithUsers(profiles), httpapi.WithAccounts(accounts), httpapi.WithPosts(postService), httpapi.WithMedia(media.NewService(&media.Repository{Pool: pool, Store: storage})), httpapi.WithNotifications(notifications.NewService(pool)), httpapi.WithSafety(moderators, privacyService, &safety.Guard{Pool: pool}), httpapi.WithBeta(betaService, metrics))
 	if err != nil {
 		return err
 	}

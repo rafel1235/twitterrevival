@@ -52,6 +52,8 @@ func (s *Service) Sweep(ctx context.Context) (SweepResult, error) {
 		result.Purged++
 	}
 	statements := []string{
+		"DELETE FROM mail_jobs WHERE created_at<now()-interval '24 hours'",
+		"DELETE FROM beta_invites WHERE expires_at<now()-interval '30 days' OR revoked_at<now()-interval '30 days'",
 		"UPDATE posts SET body='[contenuto eliminato]' WHERE deleted_at<now()-interval '30 days' AND body<>'[contenuto eliminato]'",
 		"DELETE FROM sessions WHERE expires_at<now() OR revoked_at<now()-interval '1 day'",
 		"DELETE FROM auth_tokens WHERE expires_at<now() OR consumed_at<now()-interval '1 day'",

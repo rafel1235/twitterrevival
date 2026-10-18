@@ -1,0 +1,22 @@
+{
+	admin off
+	auto_https disable_redirects
+	skip_install_trust
+}
+
+https://localhost {
+	tls internal
+	@private path /metrics /metrics/*
+	respond @private 404
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+	}
+	reverse_proxy web:3000
+}
+
+http://:8080 {
+	respond /healthz 200
+	@redirect not path /healthz
+	redir @redirect https://localhost:3443{uri} 308
+}

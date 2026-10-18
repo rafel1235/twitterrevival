@@ -2,6 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 const external = process.env.PLAYWRIGHT_BASE_URL;
 export default defineConfig({
   testDir: "./apps/web/tests",
+  testIgnore: "**/https.spec.ts",
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,

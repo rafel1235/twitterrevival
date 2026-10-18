@@ -1,0 +1,33 @@
+groups:
+  - name: radura-beta
+    rules:
+      - alert: RaduraApiUnavailable
+        expr: up{job="radura"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: API Radura non raggiungibile dal monitor locale
+      - alert: RaduraServerErrors
+        expr: sum(rate(radura_http_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(radura_http_requests_total[5m])), 0.01) > 0.05
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: Errori server oltre il 5 percento delle richieste
+      - alert: RaduraSlowResponses
+        expr: histogram_quantile(0.95, sum by (le) (rate(radura_http_request_duration_seconds_bucket[5m]))) > 1.5
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: Latenza p95 oltre 1,5 secondi
+      - alert: RaduraMailDeliveryFailed
+        expr: radura_mail_jobs_failed > 0
+        for: 1m
+        labels: { severity: warning }
+        annotations:
+          summary: Email con tentativi esauriti da verificare
+      - alert: RaduraMediaPurgeBacklog
+        expr: radura_media_purge_pending > 0
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: Eliminazione immagini in attesa da oltre dieci minuti

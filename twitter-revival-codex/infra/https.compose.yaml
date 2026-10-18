@@ -1,0 +1,36 @@
+# Local HTTPS only. No public bind, domain registration or external ACME.
+services:
+  api:
+    environment:
+      APP_ORIGIN: https://localhost:3443
+      COOKIE_SECURE: "true"
+      SMTP_ALLOW_LOCAL_PLAINTEXT: "true"
+  gateway:
+    image: caddy:2.11.7-alpine
+    ports:
+      - "127.0.0.1:3443:443"
+      - "127.0.0.1:3080:8080"
+    volumes:
+      - ./infra/Caddyfile.local:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "-q",
+          "-O",
+          "/dev/null",
+          "http://127.0.0.1:8080/healthz",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,40 @@
+rule_files: [alerts.yaml]
+evaluation_interval: 1m
+tests:
+  - name: API non raggiungibile
+    interval: 1m
+    input_series:
+      - series: up{job="radura",instance="api:8080"}
+        values: "0 0 0"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: RaduraApiUnavailable
+        exp_alerts:
+          - exp_labels:
+              { job: radura, instance: "api:8080", severity: critical }
+            exp_annotations:
+              { summary: API Radura non raggiungibile dal monitor locale }
+  - name: Email con retry esauriti
+    interval: 1m
+    input_series:
+      - series: radura_mail_jobs_failed{job="radura"}
+        values: "1 1 1"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: RaduraMailDeliveryFailed
+        exp_alerts:
+          - exp_labels: { job: radura, severity: warning }
+            exp_annotations:
+              { summary: Email con tentativi esauriti da verificare }
+  - name: Immagini in attesa persistente
+    interval: 1m
+    input_series:
+      - series: radura_media_purge_pending{job="radura"}
+        values: "1+0x12"
+    alert_rule_test:
+      - eval_time: 11m
+        alertname: RaduraMediaPurgeBacklog
+        exp_alerts:
+          - exp_labels: { job: radura, severity: warning }
+            exp_annotations:
+              { summary: Eliminazione immagini in attesa da oltre dieci minuti }

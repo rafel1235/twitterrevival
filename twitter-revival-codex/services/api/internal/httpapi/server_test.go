@@ -19,6 +19,19 @@ func testRouter(t *testing.T) http.Handler {
 	return h
 }
 
+func TestCanceledRequestsAndDeadlines(t *testing.T) {
+	for _, tc := range []struct {
+		err    error
+		status int
+	}{{context.Canceled, 499}, {context.DeadlineExceeded, 504}} {
+		w := httptest.NewRecorder()
+		(&Server{}).handleError(w, tc.err)
+		if w.Code != tc.status || strings.Contains(w.Body.String(), tc.err.Error()) {
+			t.Fatalf("wrong cancellation/deadline response: %d", w.Code)
+		}
+	}
+}
+
 func TestOriginAndCSRF(t *testing.T) {
 	for _, tc := range []struct {
 		name, origin, referer, csrf, fetch string

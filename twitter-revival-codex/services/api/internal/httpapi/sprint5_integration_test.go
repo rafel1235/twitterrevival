@@ -193,6 +193,11 @@ func TestModerationConcurrentDecisionAndSprint5Rollback(t *testing.T) {
 	if err := f.pool.QueryRow(context.Background(), "SELECT count(*) FROM moderation_actions WHERE report_id=$1", id).Scan(&count); err != nil || count != 1 {
 		t.Fatal("audit duplicated", err)
 	}
+	for v := migrations.CurrentVersion; v > 5; v-- {
+		if err := migrations.Run(context.Background(), f.pool, "down"); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err := migrations.Run(context.Background(), f.pool, "down"); err != nil {
 		t.Fatal(err)
 	}

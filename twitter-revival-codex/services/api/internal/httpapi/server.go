@@ -13,8 +13,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"radura.local/api/internal/auth"
+	"radura.local/api/internal/beta"
 	"radura.local/api/internal/media"
 	"radura.local/api/internal/moderation"
+	"radura.local/api/internal/monitoring"
 	"radura.local/api/internal/notifications"
 	"radura.local/api/internal/posts"
 	"radura.local/api/internal/privacy"
@@ -41,6 +43,8 @@ type Server struct {
 	moderation    *moderation.Service
 	privacy       *privacy.Service
 	guard         *safety.Guard
+	beta          *beta.Service
+	metrics       *monitoring.Metrics
 }
 type apiError struct {
 	Code    string            `json:"code"`
@@ -84,8 +88,23 @@ func New(service *auth.Service, cfg Config, healthy func(context.Context) error,
 		option(s)
 	}
 	router := chi.NewRouter()
+	if s.metrics != nil {
+		router.Use(s.metrics.Middleware)
+	}
 	router.Use(s.recoverJSON, requestTimeout, s.headers)
 	router.Get("/healthz", s.health)
+	if s.metrics != nil {
+		router.Handle("/metrics", s.metrics)
+	}
+	router.Get("/api/v1/beta", s.betaPublic)
+	router.Route("/api/v1/moderation/beta", func(r chi.Router) {
+		r.Use(s.requireUser)
+		r.Get("/", s.betaDashboard)
+		r.Get("/invites", s.betaInvites)
+		r.With(s.originCheck).Patch("/", s.betaConfigure)
+		r.With(s.originCheck).Post("/invites", s.betaInvites)
+		r.With(s.originCheck).Delete("/invites/{id}", s.betaInvites)
+	})
 	router.Route("/api/v1/auth", func(r chi.Router) {
 		r.Get("/me", s.me)
 		r.Group(func(m chi.Router) {
@@ -95,7 +114,7 @@ func New(service *auth.Service, cfg Config, healthy func(context.Context) error,
 			m.Post("/logout", s.logout)
 		})
 		r.Group(func(m chi.Router) {
-			m.Use(s.originCheck, NewLimiter(10, time.Minute, 4096).Middleware)
+			m.Use(s.originCheck, NewLimiter(10, time.Minute, 4096).Middleware, s.limitAuth)
 			m.With(s.requireUser).Post("/verification/request", s.requestVerification)
 			m.Post("/verification/confirm", s.confirmVerification)
 			m.Post("/password/forgot", s.forgotPassword)
@@ -191,7 +210,22 @@ func fail(w http.ResponseWriter, status int, code, message string, fields map[st
 }
 func (s *Server) handleError(w http.ResponseWriter, err error) {
 	var validation *auth.ValidationError
+	var betaValidation *beta.ValidationError
 	switch {
+	case errors.Is(err, context.Canceled):
+		// Browser navigation can cancel a DB query. Keep disconnected clients
+		// separate from server faults in operational metrics.
+		w.WriteHeader(499)
+	case errors.Is(err, context.DeadlineExceeded):
+		fail(w, 504, "request_timeout", "Richiesta scaduta. Riprova.", nil)
+	case errors.As(err, &betaValidation):
+		fail(w, 422, "validation_failed", "Controlla i dati inseriti.", betaValidation.Fields)
+	case errors.Is(err, beta.ErrInvite):
+		fail(w, 403, "invalid_invite", "Serve un invito valido per questa email. Il codice potrebbe essere scaduto, revocato o già usato.", nil)
+	case errors.Is(err, beta.ErrClosed):
+		fail(w, 409, "beta_closed", "Ingresso alla beta sospeso o posti esauriti.", nil)
+	case errors.Is(err, beta.ErrForbidden):
+		fail(w, 403, "moderator_required", "Accesso riservato ai moderatori.", nil)
 	case errors.Is(err, safety.ErrLimited):
 		w.Header().Set("Retry-After", "60")
 		fail(w, 429, "rate_limited", "Troppe richieste. Attendi un minuto.", nil)
@@ -311,6 +345,12 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.handleError(w, err)
 		return
+	}
+	if s.beta != nil {
+		if err = s.beta.Activity(r.Context(), user.ID); err != nil {
+			s.handleError(w, err)
+			return
+		}
 	}
 	respond(w, 200, map[string]any{"data": map[string]any{"user": user}})
 }

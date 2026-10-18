@@ -163,7 +163,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </Link>
         </nav>
         <div className="sprint-note">
-          <span className="status-dot" /> Sprint 5 · Uno spazio più sicuro
+          <span className="status-dot" /> Beta privata · Su invito
         </div>
         <AccountPanel />
         <p className="independent-note">
@@ -231,10 +231,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
           <div className="milestone">
-            <span className="milestone-number current">05</span>
+            <span className="milestone-number">05</span>
             <div>
               <strong>Uno spazio più sicuro</strong>
-              <p>Moderazione e controllo dei dati · Sprint attuale</p>
+              <p>Moderazione e controllo dei dati · Completato</p>
+            </div>
+          </div>
+          <div className="milestone">
+            <span className="milestone-number current">06</span>
+            <div>
+              <strong>Una piccola community</strong>
+              <p>Beta locale su invito · Sprint attuale</p>
             </div>
           </div>
         </section>

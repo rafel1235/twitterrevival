@@ -1,6 +1,6 @@
 # Backup e prova di ripristino locale
 
-Il backup comprende **PostgreSQL e l'intero volume SeaweedFS**. Un solo dump SQL non salva le immagini. Nessun cloud o servizio a pagamento. Script PowerShell dalla root del progetto, Docker Desktop avviato e immagini Sprint 5 già compilate:
+Il backup comprende **PostgreSQL e l'intero volume SeaweedFS**, comprese le tabelle Sprint 6 quando presenti. Un solo dump SQL non salva le immagini. Nessun cloud o servizio a pagamento. Script PowerShell dalla root del progetto, Docker Desktop avviato e immagini attuali già compilate:
 
 ```powershell
 docker compose up -d --build --wait
@@ -29,3 +29,7 @@ La procedura è una prova riproducibile, non una politica aziendale completa di 
 Prima di rendere utilizzabile una copia vecchia, il gestore deve riapplicare cancellazioni e revoche intervenute dopo la data del backup, ed eseguire manutenzione. Non esiste ancora un registro esterno durevole di queste cancellazioni: il ripristino pubblico rimane una procedura assistita da completare prima della beta. Nessuna garanzia che la cancellazione dell'account rimuova istantaneamente le copie storiche.
 
 Obiettivi RPO/RTO, cifratura automatica, rotazione chiavi, backup fuori macchina e simulazione di perdita del disco non sono introdotti da questo sprint. La prova locale effettiva e i numeri sono nel registro di implementazione.
+
+Con HTTPS locale già attivo non eseguire il comando base `up` qui sopra per preparare il backup: usare `./scripts/start-local-beta.ps1`, poi `./scripts/backup-verify.ps1`. Lo script di backup ferma/riavvia il container API esistente e conserva la sua origine HTTPS. I volumi Caddy/Prometheus e `.env` non sono inclusi: il ripristino può generare una nuova CA, da rendere attendibile manualmente. Il percorso storico `.local/backups/sprint5` resta invariato per preservare copie e politica di pulizia.
+
+Lo script usa il file Compose base: può comparire un avviso «orphan container» per il gateway definito nell’overlay HTTPS. Non rimuoverlo e non aggiungere `--remove-orphans` al progetto attivo: è il gateway in uso, non un container abbandonato. La pulizia automatica dello script riguarda esclusivamente il progetto temporaneo `radura-restore-XXXXXXXX`.

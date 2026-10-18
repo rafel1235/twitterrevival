@@ -1,0 +1,30 @@
+{
+  "timestamp_utc": "2026-10-18T17:54:31.696Z",
+  "environment": "Docker Desktop locale, nessuna garanzia di capacità in produzione",
+  "cohort_kind": "test",
+  "users": 50,
+  "duration_seconds": 30.93,
+  "pacing_ms": 1000,
+  "requests": 1489,
+  "requests_per_second": 48.15,
+  "latency_ms": {
+    "p50": 26.43,
+    "p95": 48.33,
+    "p99": 61.75
+  },
+  "statuses": {
+    "200": 1489
+  },
+  "network_errors": 0,
+  "thresholds": {
+    "p95_ms": 1500,
+    "p99_ms": 3000,
+    "max_rate_limited_fraction": 0.1,
+    "server_errors": 0
+  },
+  "passed": true,
+  "cleanup": {
+    "created_accounts": 50,
+    "erased_accounts": 50
+  }
+}

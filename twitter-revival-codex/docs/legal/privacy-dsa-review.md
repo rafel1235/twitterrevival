@@ -47,3 +47,11 @@ Per contestazioni nell'installazione locale: il gestore raccoglie richiesta e ID
 I backup non vengono ripuliti alla pressione di «Elimina account». Restano privati fino alla propria scadenza; un recupero deve riapplicare cancellazioni successive e revocare accessi prima della riapertura. Non esiste ancora un registro esterno automatico delle cancellazioni. Definire cifratura, autorizzazioni, frequenza, test, gestione di incidenti e obblighi di comunicazione con il consulente. Dettagli tecnici nella [procedura di backup](../operations/backup-restore.md).
 
 Nessun banner di consenso marketing fittizio: nell'anteprima non esistono tracker o pubblicità di terzi. Il cookie di sessione ha uno scopo funzionale di accesso. La disciplina applicabile ai cookie e l'informativa definitiva vanno comunque verificate per il servizio che sarà realmente offerto.
+
+## Integrazione tecnica Sprint 6 — solo locale
+
+L’inventario comprende ora inviti vincolati all’email (solo hash del codice), audit emissione/consumo/revoca e membership della coorte. Conservazione inviti scaduti o revocati: 30 giorni; eliminazione anche alla cancellazione dell’account destinatario. I riferimenti all’operatore sono disassociati se elimina il proprio account. I propri indicatori beta entrano nell’export e sono rimossi con l’account.
+
+Indicatori: primo follow, post, interazione e richiesta autenticata nella finestra D7. Tempi conservati fino a cancellazione account; consultazione aggregata riservata ai moderatori. Account precedenti e coorti sintetiche esclusi. Il polling autenticato può contribuire al ritorno: non è una misurazione di attenzione umana. Finalità, necessità, durata e informazione dei piloti vanno incluse nella revisione prima di coinvolgere persone esterne.
+
+Intenti email persistenti per verifica/reset: massimo 24 ore, nessun token in chiaro nel job. Prometheus locale conserva 7 giorni di metriche tecniche con pattern endpoint, metodo/status, latenze e dimensioni code; nessuna email, IP, contenuto o identificativo utente nelle label. Nessun tracker di terzi o recapito automatico esterno. Caddy usa CA privata locale, senza un dominio pubblico. Questa integrazione descrive il software; non sostituisce la valutazione giuridica già richiesta.

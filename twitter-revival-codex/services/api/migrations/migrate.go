@@ -14,7 +14,7 @@ import (
 //go:embed *.sql
 var files embed.FS
 
-const CurrentVersion = 5
+const CurrentVersion = 6
 
 type migration struct {
 	version int

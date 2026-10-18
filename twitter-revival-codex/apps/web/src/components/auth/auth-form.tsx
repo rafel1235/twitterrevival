@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, ApiError, type User } from "@/lib/api";
 import { useSession } from "./session-provider";
 import { Icon } from "@/components/layout/icon";
 import { productName } from "@/components/layout/app-shell";
+import { useResource } from "@/lib/use-resource";
 
 export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const register = mode === "register";
@@ -15,6 +16,20 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [fields, setFields] = useState<Record<string, string>>({});
+  const beta = useResource<{
+    data: { invite_required: boolean; enrollment_open: boolean };
+  }>("/beta");
+  const [inviteToken, setInviteToken] = useState("");
+  useEffect(() => {
+    if (!register) return;
+    const value = new URLSearchParams(window.location.hash.slice(1)).get(
+      "invite",
+    );
+    if (value) {
+      window.history.replaceState(null, "", window.location.pathname);
+      queueMicrotask(() => setInviteToken(value));
+    }
+  }, [register]);
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
@@ -35,6 +50,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         ? {
             handle: String(form.get("handle")),
             display_name: String(form.get("display_name")),
+            invite_token: inviteToken,
           }
         : {}),
     };
@@ -99,7 +115,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         </h2>
         <p className="auth-intro">
           {register
-            ? "Crea il tuo account. Le idee avranno presto un posto dove incontrarsi."
+            ? "Una piccola beta, su invito. Usa l’email a cui è destinato il tuo codice."
             : "Accedi con l’email e la password del tuo account."}
         </p>
         {loading ? (
@@ -121,6 +137,44 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           >
             {register && (
               <>
+                {beta.data?.data.invite_required && (
+                  <div className="form-field">
+                    <label htmlFor="invite_token">Codice invito</label>
+                    <input
+                      id="invite_token"
+                      name="invite_token"
+                      type="password"
+                      autoComplete="off"
+                      value={inviteToken}
+                      onChange={(e) => setInviteToken(e.target.value)}
+                      required
+                      maxLength={43}
+                      disabled={pending}
+                    />
+                    <p className="field-hint">
+                      Il codice è monouso, legato alla tua email e ha una
+                      scadenza.
+                    </p>
+                  </div>
+                )}
+                {beta.data && !beta.data.data.enrollment_open && (
+                  <p role="status">
+                    I nuovi ingressi alla beta sono in pausa. Gli account
+                    esistenti possono accedere.
+                  </p>
+                )}
+                {beta.error && (
+                  <p role="alert" className="form-error">
+                    Impossibile verificare gli inviti.{" "}
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => void beta.refresh()}
+                    >
+                      Riprova
+                    </button>
+                  </p>
+                )}
                 {field("display_name", "Come ti chiami?", "text", {
                   autoComplete: "nickname",
                 })}
@@ -166,7 +220,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
             <button
               type="submit"
               className="button primary submit-button"
-              disabled={pending}
+              disabled={pending || (register && (!beta.data || !!beta.error))}
             >
               {pending ? "Un momento…" : register ? "Crea account" : "Accedi"}
               <Icon name="arrow" size={18} />
@@ -180,9 +234,8 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           </form>
         )}
         <p className="auth-footnote">
-          Anteprima Sprint 2. Gli account sono reali; feed e pubblicazione sono
-          ancora dimostrativi. Non inserire dati sensibili in questo ambiente di
-          sviluppo.
+          Beta privata locale. Account, post e immagini sono reali. Le email di
+          prova arrivano nella casella locale; non inserire dati sensibili.
         </p>
       </section>
     </>

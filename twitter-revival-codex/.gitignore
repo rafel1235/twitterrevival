@@ -3,6 +3,7 @@ node_modules/
 out/
 coverage/
 playwright-report/
+playwright-report-https/
 test-results/
 .env
 .env.*

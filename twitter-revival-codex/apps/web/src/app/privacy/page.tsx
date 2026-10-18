@@ -26,6 +26,16 @@ export default function PrivacyPage() {
         </p>
         <h2>Esportazione e cancellazione</h2>
         <p>
+          La beta registra il codice invito in forma protetta e i tempi del
+          primo follow, post, interazione e ritorno al settimo giorno. Le
+          statistiche aggregate sono riservate ai moderatori; i tuoi dati beta
+          sono inclusi nell’esportazione e rimossi quando elimini l’account. Gli
+          inviti inutilizzati scaduti o revocati vengono rimossi dopo 30 giorni.
+          Le richieste email in coda scadono dopo 24 ore. Il monitor locale
+          conserva metriche tecniche aggregate per 7 giorni, senza email,
+          indirizzi IP o contenuti.
+        </p>
+        <p>
           Da{" "}
           <Link href="/settings/account" className="text-button">
             I tuoi dati

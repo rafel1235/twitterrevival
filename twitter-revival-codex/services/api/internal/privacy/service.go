@@ -71,6 +71,7 @@ const exportSQL = `SELECT jsonb_build_object(
  'media',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',m.id,'mime_type',mime_type,'alt_text',alt_text,'bytes',bytes,'created_at',created_at,'post_id',pm.post_id,'position',pm.position)) FROM media m LEFT JOIN post_media pm ON pm.media_id=m.id WHERE owner_id=$1 AND m.deleted_at IS NULL),'[]'),
  'notifications',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',id,'actor_id',actor_id,'type',type,'post_id',post_id,'created_at',created_at,'read_at',read_at)) FROM notifications WHERE recipient_id=$1),'[]'),
  'reports',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',id,'target_type',target_type,'target_user_id',target_user_id,'target_post_id',target_post_id,'reason',reason,'details',details,'status',status,'decision_reason',decision_reason,'created_at',created_at,'reviewed_at',reviewed_at)) FROM reports WHERE reporter_id=$1),'[]'),
+ 'beta',(SELECT jsonb_build_object('cohort',cohort_slug,'joined_at',joined_at,'last_seen_at',last_seen_at,'first_follow_at',first_follow_at,'first_post_at',first_post_at,'first_interaction_at',first_interaction_at,'returned_d7_at',returned_d7_at) FROM beta_members WHERE user_id=$1),
  'restrictions',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',id,'target_type',target_type,'target_id',target_id,'action',action,'reason',reason,'created_at',created_at)) FROM moderation_actions WHERE target_id=$1 OR target_id IN(SELECT id FROM posts WHERE author_id=$1)),'[]')
  )`
 
@@ -202,6 +203,21 @@ func (s *Service) Delete(ctx context.Context, user auth.User, password, confirma
 	}
 	defer tx.Rollback(ctx)
 	if err = lock(ctx, tx, user.ID, hash); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(ctx, "DELETE FROM mail_jobs WHERE user_id=$1 OR email=$2", user.ID, user.Email); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(ctx, "DELETE FROM beta_invites WHERE used_by=$1 OR email=$2", user.ID, user.Email); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(ctx, "DELETE FROM beta_members WHERE user_id=$1", user.ID); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(ctx, "UPDATE beta_invites SET issuer_id=NULL WHERE issuer_id=$1", user.ID); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(ctx, "UPDATE beta_invite_events SET actor_id=NULL WHERE actor_id=$1", user.ID); err != nil {
 		return err
 	}
 	token, _, err := auth.NewToken()

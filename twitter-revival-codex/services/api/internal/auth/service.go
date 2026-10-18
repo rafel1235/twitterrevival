@@ -22,6 +22,7 @@ type RegisterInput struct {
 	Email       string `json:"email"`
 	DisplayName string `json:"display_name"`
 	Password    string `json:"password"`
+	InviteToken string `json:"invite_token"`
 }
 type LoginInput struct {
 	Email    string `json:"email"`
@@ -92,6 +93,11 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (Result, er
 	if len(fields) > 0 {
 		return Result{}, &ValidationError{fields}
 	}
+	if repo, ok := s.repo.(*PostgresRepository); ok && repo.Beta != nil {
+		if err := repo.Beta.Check(ctx, input.InviteToken, input.Email); err != nil {
+			return Result{}, err
+		}
+	}
 	if !s.acquire() {
 		return Result{}, ErrBusy
 	}
@@ -104,7 +110,7 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (Result, er
 	if err != nil {
 		return Result{}, err
 	}
-	result.User, err = s.repo.Register(ctx, NewUser{input.Handle, input.Email, input.DisplayName, hash}, session)
+	result.User, err = s.repo.Register(ctx, NewUser{Handle: input.Handle, Email: input.Email, DisplayName: input.DisplayName, PasswordHash: hash, InviteToken: input.InviteToken}, session)
 	return result, err
 }
 
