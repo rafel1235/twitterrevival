@@ -87,6 +87,20 @@ Playwright usa API/PG/S3/SMTP reali e crea esclusivamente account sintetici. Il 
 
 Problemi emersi e risolti: tre regressioni iniziali dei contratti/rollback e ordine di validazione media; nomi accessibili dei select corretti dopo timeout E2E; interruzione di una prima prova browser sovrapposta alla pausa backup, poi prove separate; format inizialmente impedito dall'ACL dei backup, corretto usando glob sulle sole sorgenti. La suite finale sopra è passata senza retry applicativi fittizi o limiti disabilitati. Gli helper rispettano Retry-After reale.
 
+### Pulizia manuale autorizzata sui dati correnti
+
+Il **18 ottobre 2026 alle 18:48 Europe/Rome**, dopo l'autorizzazione esplicita dell'utente, eseguiti entrambi i comandi sullo stack persistente corrente. La precedente richiesta era stata bloccata dalla revisione automatica; la successiva esecuzione è avvenuta con l'approvazione del gestore.
+
+| Verifica                   | Esito reale                                                          |
+| -------------------------- | -------------------------------------------------------------------- |
+| `/api -maintenance`        | Exit 0; immagini eliminate **0**, eliminazioni media in attesa **0** |
+| `/api -reconcile-media`    | Exit 0; oggetti S3 orfani eliminati **0**                            |
+| `/api -healthcheck`        | Exit 0                                                               |
+| Stato Compose dopo pulizia | DB, storage, Mailpit, API e web tutti healthy                        |
+| Smoke HTTP dopo pulizia    | Home e `/privacy`: 200; `/api/v1/auth/me` senza sessione: 401 atteso |
+
+I contatori dei comandi riguardano gli oggetti media; non quantificano la pulizia dei record tecnici scaduti nel database.
+
 ## Limiti e attività successive
 
 - **Nessuna dichiarazione di conformità o prontezza pubblica.** Titolare, contatti, basi giuridiche, notice esterne, comunicazioni agli autori e ricorsi da definire con consulenza. Account sospesi richiedono assistenza esterna al login ordinario.
@@ -95,6 +109,5 @@ Problemi emersi e risolti: tre regressioni iniziali dei contratti/rollback e ord
 - Backup privati locali, senza cifratura automatica o copia fuori macchina. Retention dei backup gestita al successivo comando riuscito; dump manuali esclusi. Manca un registro esterno durevole per riapplicare cancellazioni dopo un vero disaster recovery.
 - Quote peer Next condivise, antispam essenziale, nessun CAPTCHA/MFA. Coda email non durevole e verifica email non obbligatoria nell'anteprima.
 - CI aggiornata ma **non eseguita su GitHub**; race detector Linux configurato, non eseguito nella shell Windows. Nessun penetration test indipendente, load test o deploy effettuato.
-- La revisione automatica delle approvazioni ha rifiutato lo smoke manuale `-maintenance` / `-reconcile-media` sui dati persistenti correnti: queste operazioni possono eliminare irreversibilmente dati scaduti e oggetti S3. Nessun aggiramento: lo smoke finale è di sola lettura. Sweep, retry, retention e riconciliazione sono verificati su schemi e oggetti di test separati. L'esecuzione manuale sui dati correnti richiede autorizzazione specifica del gestore.
 
 Prossimo passo operativo: il gestore sceglie un proprio handle esistente e assegna il ruolo con `docker compose exec api /api -role-user HANDLE -role moderator -reason "Assegnazione approvata dal gestore locale."`, poi prova `/moderation`. Concordare la revisione dei limiti sopra prima di autorizzare lo Sprint 6. Il sito rimane su **http://localhost:3000**, Mailpit su **http://localhost:8025**.
