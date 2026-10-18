@@ -19,6 +19,14 @@ type Store interface {
 	Get(context.Context, string) ([]byte, error)
 	Delete(context.Context, string) error
 }
+type StoredObject struct {
+	Key      string
+	Modified time.Time
+	Bytes    int64
+}
+type ObjectLister interface {
+	Objects(context.Context, func(StoredObject) error) error
+}
 type S3Store struct {
 	client *s3.Client
 	bucket string
@@ -68,4 +76,19 @@ func (s *S3Store) Get(ctx context.Context, key string) ([]byte, error) {
 func (s *S3Store) Delete(ctx context.Context, key string) error {
 	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: &s.bucket, Key: &key})
 	return err
+}
+func (s *S3Store) Objects(ctx context.Context, visit func(StoredObject) error) error {
+	pager := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{Bucket: &s.bucket, Prefix: aws.String("images/")})
+	for pager.HasMorePages() {
+		page, err := pager.NextPage(ctx)
+		if err != nil {
+			return err
+		}
+		for _, o := range page.Contents {
+			if err = visit(StoredObject{aws.ToString(o.Key), aws.ToTime(o.LastModified), aws.ToInt64(o.Size)}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

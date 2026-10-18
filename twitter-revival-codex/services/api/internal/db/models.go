@@ -47,6 +47,18 @@ type Medium struct {
 	AltText    string
 	CreatedAt  pgtype.Timestamptz
 	DeletedAt  pgtype.Timestamptz
+	PurgedAt   pgtype.Timestamptz
+}
+
+type ModerationAction struct {
+	ID          string
+	ModeratorID pgtype.UUID
+	ReportID    pgtype.UUID
+	TargetType  string
+	TargetID    string
+	Action      string
+	Reason      string
+	CreatedAt   pgtype.Timestamptz
 }
 
 type Notification struct {
@@ -62,16 +74,17 @@ type Notification struct {
 }
 
 type Post struct {
-	ID             string
-	AuthorID       string
-	Body           string
-	ReplyToID      pgtype.UUID
-	QuoteOfID      pgtype.UUID
-	Visibility     string
-	CreatedAt      pgtype.Timestamptz
-	UpdatedAt      pgtype.Timestamptz
-	DeletedAt      pgtype.Timestamptz
-	SearchDocument interface{}
+	ID                 string
+	AuthorID           string
+	Body               string
+	ReplyToID          pgtype.UUID
+	QuoteOfID          pgtype.UUID
+	Visibility         string
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
+	DeletedAt          pgtype.Timestamptz
+	SearchDocument     interface{}
+	ModerationHiddenAt pgtype.Timestamptz
 }
 
 type PostAudience struct {
@@ -116,6 +129,27 @@ type Profile struct {
 	AvatarStyle  string
 }
 
+type RateLimit struct {
+	Subject     string
+	Bucket      string
+	WindowStart pgtype.Timestamptz
+	Requests    int32
+}
+
+type Report struct {
+	ID             string
+	ReporterID     pgtype.UUID
+	TargetType     string
+	TargetUserID   string
+	TargetPostID   pgtype.UUID
+	Reason         string
+	Details        string
+	Status         string
+	DecisionReason string
+	CreatedAt      pgtype.Timestamptz
+	ReviewedAt     pgtype.Timestamptz
+}
+
 type Repost struct {
 	ID        string
 	UserID    string
@@ -141,6 +175,7 @@ type User struct {
 	CreatedAt       pgtype.Timestamptz
 	UpdatedAt       pgtype.Timestamptz
 	Status          string
+	Role            string
 }
 
 type VisibleNotification struct {

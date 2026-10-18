@@ -6,6 +6,7 @@ export type User = {
   created_at: string;
   email_verified: boolean;
   avatar_style: string;
+  role: "member" | "moderator";
 };
 type Failure = {
   error?: { message?: string; fields?: Record<string, string> };
@@ -28,6 +29,7 @@ export async function api<T>(
     form?: FormData;
     signal?: AbortSignal;
     method?: "GET" | "POST" | "PATCH" | "DELETE";
+    response?: "blob";
   } = {},
 ): Promise<T> {
   let response: Response;
@@ -72,5 +74,6 @@ export async function api<T>(
     );
   }
   if (response.status === 204) return undefined as T;
+  if (options.response === "blob") return (await response.blob()) as T;
   return response.json() as Promise<T>;
 }

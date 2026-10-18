@@ -7,7 +7,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"radura.local/api/internal/auth"
 	"radura.local/api/internal/db"
+	"radura.local/api/internal/safety"
 )
 
 type Repository struct{ Pool *pgxpool.Pool }
@@ -73,6 +75,12 @@ func (r *Repository) Mutate(ctx context.Context, actor, target, action string) e
 	}
 	defer tx.Rollback(ctx)
 	q := db.New(tx)
+	if err = safety.LockActive(ctx, q, actor, target); err != nil {
+		if errors.Is(err, auth.ErrUnauthorized) {
+			return ErrNotFound
+		}
+		return err
+	}
 	if err = q.LockUserPair(ctx, db.LockUserPairParams{ActorID: actor, TargetID: target}); err != nil {
 		return err
 	}

@@ -9,15 +9,16 @@ import (
 	"mime"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"radura.local/api/internal/auth"
 	"radura.local/api/internal/media"
+	"radura.local/api/internal/moderation"
 	"radura.local/api/internal/notifications"
 	"radura.local/api/internal/posts"
+	"radura.local/api/internal/privacy"
+	"radura.local/api/internal/safety"
 	"radura.local/api/internal/users"
 )
 
@@ -37,6 +38,9 @@ type Server struct {
 	posts         *posts.Service
 	media         *media.Service
 	notifications *notifications.Service
+	moderation    *moderation.Service
+	privacy       *privacy.Service
+	guard         *safety.Guard
 }
 type apiError struct {
 	Code    string            `json:"code"`
@@ -54,6 +58,9 @@ func WithPosts(service *posts.Service) Option { return func(s *Server) { s.posts
 func WithMedia(service *media.Service) Option { return func(s *Server) { s.media = service } }
 func WithNotifications(service *notifications.Service) Option {
 	return func(s *Server) { s.notifications = service }
+}
+func WithSafety(m *moderation.Service, p *privacy.Service, g *safety.Guard) Option {
+	return func(s *Server) { s.moderation = m; s.privacy = p; s.guard = g }
 }
 
 func New(service *auth.Service, cfg Config, healthy func(context.Context) error, options ...Option) (http.Handler, error) {
@@ -77,12 +84,12 @@ func New(service *auth.Service, cfg Config, healthy func(context.Context) error,
 		option(s)
 	}
 	router := chi.NewRouter()
-	router.Use(s.recoverJSON, middleware.Timeout(10*time.Second), s.headers)
+	router.Use(s.recoverJSON, requestTimeout, s.headers)
 	router.Get("/healthz", s.health)
 	router.Route("/api/v1/auth", func(r chi.Router) {
 		r.Get("/me", s.me)
 		r.Group(func(m chi.Router) {
-			m.Use(s.originCheck, s.limiter.Middleware)
+			m.Use(s.originCheck, s.limiter.Middleware, s.limitAuth)
 			m.Post("/register", s.register)
 			m.Post("/login", s.login)
 			m.Post("/logout", s.logout)
@@ -149,6 +156,22 @@ func New(service *auth.Service, cfg Config, healthy func(context.Context) error,
 			m.Post("/{id}/read", s.readNotifications)
 		})
 	})
+	router.Route("/api/v1/reports", func(r chi.Router) {
+		r.Use(s.requireUser)
+		r.Get("/", s.listReports)
+		r.With(s.originCheck).Post("/", s.createReport)
+	})
+	router.Route("/api/v1/moderation", func(r chi.Router) {
+		r.Use(s.requireUser)
+		r.Get("/reports", s.listReports)
+		r.Get("/audit", s.moderationAudit)
+		r.With(s.originCheck).Post("/reports/{id}/decisions", s.moderate)
+	})
+	router.Route("/api/v1/account", func(r chi.Router) {
+		r.Use(s.requireUser, s.originCheck)
+		r.Post("/export", s.exportAccount)
+		r.Delete("/", s.deleteAccount)
+	})
 	router.NotFound(func(w http.ResponseWriter, r *http.Request) { fail(w, 404, "not_found", "Endpoint inesistente.", nil) })
 	router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 		fail(w, 405, "method_not_allowed", "Metodo non consentito.", nil)
@@ -169,6 +192,21 @@ func fail(w http.ResponseWriter, status int, code, message string, fields map[st
 func (s *Server) handleError(w http.ResponseWriter, err error) {
 	var validation *auth.ValidationError
 	switch {
+	case errors.Is(err, safety.ErrLimited):
+		w.Header().Set("Retry-After", "60")
+		fail(w, 429, "rate_limited", "Troppe richieste. Attendi un minuto.", nil)
+	case errors.Is(err, safety.ErrSpam):
+		fail(w, 409, "duplicate_post", "Hai già pubblicato questo testo negli ultimi 10 minuti.", nil)
+	case errors.Is(err, moderation.ErrForbidden):
+		fail(w, 403, "moderator_required", "Accesso riservato ai moderatori.", nil)
+	case errors.Is(err, moderation.ErrNotFound):
+		fail(w, 404, "not_found", "Segnalazione o contenuto non disponibile.", nil)
+	case errors.Is(err, moderation.ErrConflict):
+		fail(w, 409, "moderation_conflict", "Stato già cambiato o azione non consentita. Aggiorna la coda.", nil)
+	case errors.Is(err, privacy.ErrPassword):
+		fail(w, 403, "password_required", "La password attuale non è corretta.", nil)
+	case errors.Is(err, privacy.ErrTooLarge):
+		fail(w, 413, "export_too_large", "Archivio oltre il limite automatico. Richiedi l’esportazione completa al gestore.", nil)
 	case errors.As(err, &validation):
 		fail(w, 422, "validation_failed", "Controlla i dati inseriti.", validation.Fields)
 	case errors.Is(err, auth.ErrConflict):
@@ -199,7 +237,8 @@ func (s *Server) handleError(w http.ResponseWriter, err error) {
 		w.Header().Set("Retry-After", "5")
 		fail(w, 503, "auth_busy", "Servizio occupato, riprova tra poco.", nil)
 	default:
-		slog.Error("request failed", "error", err)
+		// Driver errors can contain SQL values, addresses or storage keys.
+		slog.Error("request failed", "class", safeErrorClass(err))
 		fail(w, 500, "internal_error", "Errore del servizio. Riprova più tardi.", nil)
 	}
 }
@@ -330,6 +369,9 @@ func (s *Server) originCheck(next http.Handler) http.Handler {
 			fail(w, 403, "forbidden_origin", "Origine o protezione CSRF non valida.", nil)
 			return
 		}
+		if currentUser(r).ID != "" && !s.limitAccount(w, r) {
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
 }
@@ -337,7 +379,7 @@ func (s *Server) recoverJSON(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if recover() != nil {
-				slog.Error("request panic", "path", strings.TrimSpace(r.URL.Path))
+				slog.Error("request panic")
 				fail(w, 500, "internal_error", "Errore del servizio.", nil)
 			}
 		}()

@@ -158,3 +158,23 @@ func (s *Service) Logout(ctx context.Context, token string) error {
 	}
 	return s.repo.RevokeSession(ctx, TokenHash(token))
 }
+
+// ConfirmPassword returns an expected hash for a subsequent transaction to
+// compare under its account lock, fencing concurrent password reset/erasure.
+func (s *Service) ConfirmPassword(ctx context.Context, user User, password string) (string, error) {
+	if !validPassword(password) {
+		return "", ErrUnauthorized
+	}
+	if !s.acquire() {
+		return "", ErrBusy
+	}
+	defer s.release()
+	account, err := s.repo.FindAccount(ctx, user.Email)
+	if err != nil {
+		return "", err
+	}
+	if !VerifyPassword(account.PasswordHash, password) || account.Status != "active" || account.User.ID != user.ID {
+		return "", ErrUnauthorized
+	}
+	return account.PasswordHash, nil
+}

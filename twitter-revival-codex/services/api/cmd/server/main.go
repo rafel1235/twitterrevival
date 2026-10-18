@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -15,11 +16,15 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"radura.local/api/internal/auth"
+	"radura.local/api/internal/backup"
 	"radura.local/api/internal/httpapi"
 	"radura.local/api/internal/mailer"
 	"radura.local/api/internal/media"
+	"radura.local/api/internal/moderation"
 	"radura.local/api/internal/notifications"
 	"radura.local/api/internal/posts"
+	"radura.local/api/internal/privacy"
+	"radura.local/api/internal/safety"
 	"radura.local/api/internal/users"
 	"radura.local/api/migrations"
 )
@@ -33,6 +38,12 @@ func env(key, fallback string) string {
 func run() error {
 	migrate := flag.String("migrate", "", "apply migrations: up or down")
 	healthcheck := flag.Bool("healthcheck", false, "check a running server")
+	roleHandle := flag.String("role-user", "", "local operator: existing handle")
+	role := flag.String("role", "", "local operator: moderator or member")
+	reason := flag.String("reason", "", "audited reason for role change (10-2000 characters)")
+	maintenance := flag.Bool("maintenance", false, "run privacy retention and media purge once")
+	reconcile := flag.Bool("reconcile-media", false, "remove S3 orphans older than 24 hours")
+	manifest := flag.Bool("backup-manifest", false, "print read-only database and S3 SHA-256 verification manifest")
 	flag.Parse()
 	addr := env("API_ADDR", "127.0.0.1:8080")
 	if *healthcheck {
@@ -51,7 +62,11 @@ func run() error {
 	if databaseURL == "" {
 		return errors.New("DATABASE_URL is required")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	operationTimeout := 30 * time.Second
+	if *manifest || *reconcile || *maintenance {
+		operationTimeout = 5 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), operationTimeout)
 	defer cancel()
 	poolConfig, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
@@ -70,6 +85,10 @@ func run() error {
 	if *migrate != "" {
 		return migrations.Run(ctx, pool, *migrate)
 	}
+	moderators := &moderation.Service{Pool: pool}
+	if *roleHandle != "" || *role != "" {
+		return moderators.SetRole(ctx, *roleHandle, *role, *reason)
+	}
 	ttl, err := strconv.Atoi(env("SESSION_TTL_HOURS", "168"))
 	if err != nil || ttl < 1 || ttl > 720 {
 		return errors.New("SESSION_TTL_HOURS must be between 1 and 720")
@@ -87,8 +106,38 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	if *manifest {
+		if err = storage.Ready(ctx); err != nil {
+			return errors.New("backup storage unavailable")
+		}
+		result, e := backup.Build(ctx, pool, storage)
+		if e != nil {
+			return errors.New("backup verification failed")
+		}
+		return json.NewEncoder(os.Stdout).Encode(result)
+	}
 	if err = storage.Ensure(ctx); err != nil {
 		return err
+	}
+	privacyService := privacy.NewService(pool, service, storage)
+	if *reconcile {
+		count, err := privacyService.Reconcile(ctx)
+		if err != nil {
+			return errors.New("media reconciliation failed")
+		}
+		slog.Info("media reconciliation", "purged", count)
+		return nil
+	}
+	if *maintenance {
+		result, err := privacyService.Sweep(ctx)
+		if err != nil {
+			return errors.New("privacy maintenance failed")
+		}
+		slog.Info("privacy maintenance", "purged", result.Purged, "pending", result.Pending)
+		if result.Pending > 0 {
+			return errors.New("storage deletions pending retry")
+		}
+		return nil
 	}
 	healthy := func(ctx context.Context) error {
 		var version int
@@ -115,17 +164,20 @@ func run() error {
 	accounts := auth.NewAccountService(&auth.PostgresRepository{Pool: pool}, service, sender, origin)
 	profiles := users.NewService(&users.Repository{Pool: pool})
 	postService := posts.NewService(&posts.Repository{Pool: pool})
-	handler, err := httpapi.New(service, httpapi.Config{Origin: origin, CookieSecure: secure, SessionTTL: duration}, healthy, httpapi.WithUsers(profiles), httpapi.WithAccounts(accounts), httpapi.WithPosts(postService), httpapi.WithMedia(media.NewService(&media.Repository{Pool: pool, Store: storage})), httpapi.WithNotifications(notifications.NewService(pool)))
+	handler, err := httpapi.New(service, httpapi.Config{Origin: origin, CookieSecure: secure, SessionTTL: duration}, healthy, httpapi.WithUsers(profiles), httpapi.WithAccounts(accounts), httpapi.WithPosts(postService), httpapi.WithMedia(media.NewService(&media.Repository{Pool: pool, Store: storage})), httpapi.WithNotifications(notifications.NewService(pool)), httpapi.WithSafety(moderators, privacyService, &safety.Guard{Pool: pool}))
 	if err != nil {
 		return err
 	}
 	if err = healthy(ctx); err != nil {
 		return errors.New("apply migrations before starting server")
 	}
-	server := &http.Server{Addr: addr, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 * 1024}
+	server := &http.Server{Addr: addr, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 70 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 * 1024}
 	shutdown, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	accounts.Start(shutdown)
+	maintenanceDone := make(chan struct{})
+	go func() { defer close(maintenanceDone); privacyService.RunMaintenance(shutdown) }()
+	defer func() { stop(); <-maintenanceDone }()
 	defer func() { stop(); accounts.Wait() }()
 	done := make(chan error, 1)
 	go func() { slog.Info("API listening", "addr", addr); done <- server.ListenAndServe() }()

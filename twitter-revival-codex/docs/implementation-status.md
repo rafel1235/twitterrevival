@@ -1,75 +1,100 @@
-# Stato implementazione · 18 ottobre 2026
+# Stato implementazione — Sprint 5
 
-**Sprint 4 completato e verificato localmente: immagini su storage S3, ricerca PostgreSQL e notifiche persistenti.** Stack aggiornato attivo in Docker. Conservati i resoconti [Sprint 1](implementation-status-sprint-1.md), [Sprint 2](implementation-status-sprint-2.md) e [Sprint 3](implementation-status-sprint-3.md). Nessuna implementazione anticipata degli Sprint 5–6.
+Data: **18 ottobre 2026**. Prodotto locale: **Radura**, progetto interno Twitter Revival. Sprint 5 implementato; nessuna implementazione Sprint 6 o pubblicazione esterna.
 
-## Preservazione
+## Stato iniziale e conservazione
 
-Letti interamente `AGENTS.md` e `PROJECT_SPEC.md`; invariati insieme a `CODEX_START_PROMPT.md`. Git iniziale pulito su `main`, root nella cartella contenitore `twitter revival`. Nessuna modifica a indice, branch, cronologia o configurazione globale; nessun commit, push o deploy.
+- Letti integralmente AGENTS.md e PROJECT_SPEC.md; repository applicativo annidato in `twitter-revival-codex`, root Git nella cartella superiore `twitter revival`.
+- Git inizialmente pulito, ramo `main`. Nessun commit, push, cambio ramo, reset o modifica dei file di specifica. `.env` e i segreti esistenti conservati.
+- Stack precedente sano con schema 4. Backup preliminare PostgreSQL `.local/backups/before-sprint5.dump`, **105.347 byte**. Nessun azzeramento del database o dei volumi attivi.
+- Registro precedente archiviato in `docs/implementation-status-sprint-4.md`.
 
-Backup PostgreSQL prima dell'upgrade: `.local/backups/before-sprint4.dump`, **59.140 byte**. Account, sessioni, grafo sociale, post, interazioni e volume PostgreSQL conservati. Aggiunte solo variabili S3 mancanti a `.env`, con un segreto CSPRNG distinto, senza stampare credenziali né sovrascrivere valori precedenti. Nuovo volume persistente `media_data`; nessun account cloud o servizio a pagamento. Segreti/backup/tool/artifact esclusi da Git.
+## Incremento realizzato
 
-## File e attività completate
+- Migrazione **005** con rollback: ruoli, report, audit, oscuramento dei post, stato purge media e rate limit persistenti.
+- Report reali su post/profili, idempotenza per report aperto, ricevuta e lista personale paginata. Blocchi dello Sprint 2 preservati e coperti dalle regressioni.
+- Pannello moderatore con filtro/cursori, prove testuali, decisioni motivate e audit transazionale. Oscuramento/ripristino, sospensione/riattivazione e revoca sessioni/token. Ruoli esclusivamente tramite CLI locale tracciata; nessun amministratore predefinito.
+- Visibilità uniforme in feed, ricerca, anteprime, notifiche e download. L'autore può eliminare anche il proprio post oscurato; un moderatore non ripristina un post eliminato.
+- Quote PostgreSQL per account e auth peer; deduplica dei post per 10 minuti, serializzata. URL con slash finale usano la stessa quota. Nessuna fiducia in X-Forwarded-For.
+- Log di errore con sole classi tecniche: nessun errore grezzo pgx/S3, path, query o credenziale.
+- Export ZIP reale con `data.json` e immagini proprie, campi ammessi espliciti, password attuale e protezioni sessione/Origin/CSRF. Nessun hash/token/chiave S3 nel file.
+- Cancellazione account transazionale: pulizia immediata di identità/profilo/testi e relazioni, revoca sessioni/token, tombstone per preservare risposte altrui, coda durevole di eliminazione immagini.
+- Manutenzione all'avvio e ogni minuto: bozze 24h, singoli post eliminati 30 giorni, report chiusi/audit 180 giorni. Retry S3 persistenti; riconciliazione orfani oltre 24h via CLI.
+- Backup completo DB + volume SeaweedFS e restore isolato verificato con digest di tutte le righe e immagini. Script locale, ACL Windows e pulizia controllata delle proprie copie scadute.
+- Pagine responsive per dati account, report, moderazione e informazioni privacy dell'anteprima. Bozza privacy/DSA con fonti primarie, inventario dati e procedure da definire prima del lancio.
 
-| Area                | File principali                                                                                                                                                            | Risultato                                                                                 |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Schema/query        | `services/api/migrations/004_discovery_media.{up,down}.sql`, `migrate.go`, `sqlc.yaml`, `db/queries/{media,discovery}.sql`, `internal/db/`                                 | media/post_media, FTS generato e GIN, notifiche con vincoli/trigger/view; sqlc rigenerato |
-| Media               | `services/api/internal/media/{image,service,storage}.go`                                                                                                                   | Decode/ricodifica, MIME/dimensioni/quote, S3 privato, bozze, autorizzazione contenuti     |
-| Ricerca/notifiche   | `internal/search/query.go`, `internal/users/search.go`, `internal/notifications/service.go`, modulo posts aggiornato                                                       | FTS post, ricerca handle/nome, cursori, notifiche atomiche e stato letto                  |
-| API                 | `internal/httpapi/{media,discovery,server}.go`, `cmd/server/main.go`                                                                                                       | Route autenticate, multipart limitato, CSRF/origin, rate limit, startup/health S3         |
-| Frontend            | `apps/web/src/app/{search,notifications}/`, `components/discovery/`, `components/posts/{attachments,draft-images,composer}.tsx`, `lib/notifications.ts`                    | Upload/preview/recupero bozze, ricerca, notifiche, badge/polling, cinque voci mobile      |
-| Integrazione UI     | `post-card.tsx`, `post-list.tsx`, `connections.tsx`, `app-shell.tsx`, `globals.css`, `lib/{api,posts}.ts`                                                                  | Immagini e nuovi percorsi integrati alle funzioni esistenti; multipart same-origin        |
-| Test                | `internal/media/image_test.go`, `internal/search/query_test.go`, `internal/httpapi/sprint4_integration_test.go`, `apps/web/tests/discovery.spec.ts`, fixture PNG originale | Test unit/integration/S3/browser; fixture precedenti adattate alla migrazione 004         |
-| Configurazione/docs | `compose.yaml`, `.env.example`, `go.mod/go.sum`, entrambi i workflow CI, README, architettura/matrice Sprint 4 e questo registro                                           | Avvio riproducibile, storage persistente, endpoint e limiti documentati                   |
+## File creati principali
 
-Unica nuova dipendenza applicativa: SDK AWS Go v2, **S3 1.114.3 / core 1.47.3 / credentials 1.20.9**, con dipendenze indirette fissate in go.sum. Nessuna nuova dipendenza npm; package-lock invariato. Nuovo servizio locale **SeaweedFS 4.48**, immagine ufficiale del progetto, endpoint S3 sul solo loopback 8333. PostgreSQL, Go/Chi, Next/React/TypeScript e Mailpit restano quelli verificati nello Sprint 3.
+```text
+services/api/migrations/005_safety_privacy.{up,down}.sql
+services/api/db/queries/safety.sql
+services/api/internal/safety/guard.go
+services/api/internal/moderation/service.go
+services/api/internal/privacy/{service,maintenance}.go
+services/api/internal/backup/manifest.go
+services/api/internal/httpapi/{safety.go,sprint5_integration_test.go}
+services/api/internal/db/safety.sql.go
+apps/web/src/components/safety/{settings-nav,report-button,account-settings,reports-view}.tsx
+apps/web/src/components/safety/safety.module.css
+apps/web/src/app/{moderation,privacy}/page.tsx
+apps/web/src/app/settings/{account,reports}/page.tsx
+apps/web/tests/safety.spec.ts
+infra/restore.compose.yaml
+scripts/backup-verify.ps1
+docs/architecture/sprint-5.md
+docs/reverse-engineering/sprint-5-matrix.md
+docs/security/sprint-5-review.md
+docs/legal/privacy-dsa-review.md
+docs/operations/backup-restore.md
+docs/implementation-status-sprint-4.md
+```
 
-## Endpoint aggiunti
+File aggiornati: server/CLI e router, auth DTO/query/repository, lock delle scritture social/post/media, storage S3, runner/sqlc e query generate, card/profilo/navigazione/impostazioni, client API, test rollback Sprint 3/4, README e `.env.example`. Script format delimitati alle cartelle sorgenti per evitare l'accesso ai backup privati. Workflow aggiornati sia nella root Git effettiva `../.github/workflows/radura-ci.yml` sia nel template interno.
 
-- `POST /api/v1/media`: file + alt_text multipart, 201 con metadati pubblici e URL same-origin.
-- `GET /api/v1/media/drafts`: proprie bozze con scadenza e stato associabile.
-- `GET /api/v1/media/{id}` e `GET /api/v1/media/{id}/content`: metadati/byte solo se visibili.
-- `DELETE /api/v1/media/{id}`: 204 per bozza propria, 409 se associata, 404 se altrui/non disponibile.
-- `GET /api/v1/search?q=…&type=posts|users&cursor=…&limit=…`.
-- `GET /api/v1/notifications` e `GET /api/v1/notifications/unread-count`.
-- `POST /api/v1/notifications/{id}/read` e `POST /api/v1/notifications/read`: 204, solo notifiche del destinatario.
+## Nuovi endpoint funzionanti
 
-`POST /posts` ora accetta `media_ids`, massimo quattro immagini proprie non riusate e caricate da meno di 24 ore. Le card/preview restituiscono `media[]`. Tutte le letture richiedono sessione; mutazioni protette da origin/Fetch Metadata/header CSRF. JSON limitato a 8 KiB, multipart a 5 MiB di file più overhead limitato. Rate limit nuovi: media 20 mutazioni/minuto, ricerca 120 letture/minuto, stato notifiche 60 mutazioni/minuto per peer.
+| Endpoint                                         | Comportamento                                    |
+| ------------------------------------------------ | ------------------------------------------------ |
+| `POST /api/v1/reports`                           | Crea/riceve report aperto, 201 con ID            |
+| `GET /api/v1/reports`                            | Solo report propri, filtro e cursore             |
+| `GET /api/v1/moderation/reports`                 | Coda riservata ai moderatori                     |
+| `POST /api/v1/moderation/reports/{id}/decisions` | Decisione motivata e audit atomici, 204          |
+| `GET /api/v1/moderation/audit`                   | Registro riservato paginato                      |
+| `POST /api/v1/account/export`                    | Password attuale → ZIP privato                   |
+| `DELETE /api/v1/account`                         | Password + ELIMINA → cancellazione e revoca, 204 |
 
-## Scelte e controlli verificati
+Tutti richiedono sessione. Mutazioni con JSON, origine esatta e header CSRF; 403 per ruolo/password insufficienti, 404 per target indisponibile, 409 per stato concorrente/spam, 422 per validazioni, 429 con Retry-After per quota. Endpoint Sprint 1–4 preservati.
 
-JPEG/PNG soltanto: max 5 MiB, 4096 px per lato, 8 megapixel; decode delle dimensioni prima dell'allocazione, poi ricodifica completa con rimozione metadati/byte aggiunti, output max 8 MiB. Descrizione obbligatoria 1–200 code point. Due elaborazioni simultanee, 12 bozze e 100 MiB attivi/account, verifica quota serializzata. Bucket privato, chiavi casuali a 256 bit, nessun URL S3/credenziale al browser; download con controllo visibilità, nosniff/CSP e private,no-store. Blocchi e post cancellati impediscono il download anche conoscendo l'URL.
+## Verifiche eseguite ed esiti reali
 
-Ricerca FTS PostgreSQL simple/websearch sui post, prefisso handle o sottostringa nome per persone, senza email. Indice aggiornato all'edit; wildcard LIKE letterali. Cursori e ordine cronologico; filtri su blocchi/account inattivi. Notifiche follow/like/repost/reply/quote nella stessa transazione dell'azione, deduplicate, senza notifiche verso sé stessi o backfill storico. Undo/cancellazione/blocco rimuovono quelle collegate; lettura singola/tutte persistente. Polling ogni 30 secondi con scheda visibile, abort e protezione dalle risposte obsolete.
+| Verifica                                               | Esito                                                                                                                                                                                                                    |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `sqlc generate` e `gofmt`                              | Query generate e Go formattato                                                                                                                                                                                           |
+| `go vet ./...`                                         | Pass                                                                                                                                                                                                                     |
+| `go test -count=1 -json ./...` con PostgreSQL/S3 reali | **37 test principali + 31 sottocasi passati; 0 test saltati; 0 fallimenti**                                                                                                                                              |
+| Build Go nativa e immagini API/migrate                 | Pass                                                                                                                                                                                                                     |
+| `npm run format:check`, `typecheck`, `lint`            | Pass, nessun warning ESLint nel lint                                                                                                                                                                                     |
+| Build Next nativa e Docker                             | Pass; nuove route incluse                                                                                                                                                                                                |
+| `E2E_AUTH=1 E2E_MAILPIT=1 npm run test:smoke`          | **39/39 pass**, desktop/tablet/mobile, **1,7 minuti**                                                                                                                                                                    |
+| Avvio Compose e migrazioni                             | DB/storage/mailpit/API/web sani; migrate exit 0; schema **5**                                                                                                                                                            |
+| Backup/restore completo                                | **Pass: 16 tabelle, 1.117 righe, 13 immagini S3**, conteggi/digest identici; copia `.local/backups/sprint5/20261018T154252Z_3814de87`, ricevuta `verified.json`. Due prove complete riuscite, volumi temporanei rimossi. |
+| Sintassi script PowerShell                             | Pass                                                                                                                                                                                                                     |
+| Diff whitespace e specifiche                           | `git diff --check` pass; AGENTS/PROJECT_SPEC/CODEX_START_PROMPT invariati                                                                                                                                                |
 
-## Verifiche realmente eseguite
+Test backend nuovi: autorizzazione/CSRF e privacy dei report, due decisioni concorrenti con audit unico, ripristino/sospensione/revoca ruolo, filtri sui contenuti e media, ZIP con immagini e assenza di dati di autenticazione, password errata, erasure con risposte altrui preservate, guasto DELETE S3 e retry durevole, scadenza bozze e retention post, orphan cleanup con grazia, quota persistente fra istanze, deduplica concorrente, scritture già autenticate bloccate dalla cancellazione e log con sentinelle sensibili.
 
-| Verifica                                                                | Esito                                                                                                                               |
-| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `sqlc generate`, `gofmt`, `go vet ./...`                                | PASS                                                                                                                                |
-| `go test -count=1 -json ./...` con TEST_DATABASE_URL e TEST_S3_ENDPOINT | **30 test principali + 31 sotto-casi PASS, zero skip, exit 0**; PostgreSQL e S3 reali                                               |
-| `go build -o … ./cmd/server`                                            | PASS nativo e nel build Docker                                                                                                      |
-| `npm run format:check`, `npm run typecheck`, `npm run lint`             | PASS; zero warning/errori ESLint                                                                                                    |
-| Build Next finale in Docker                                             | PASS, TypeScript e 13 pagine statiche generate; nuove route /search e /notifications                                                |
-| `docker compose config --quiet` e `up --build -d --wait`                | PASS; db, storage, mailpit, api e web healthy, migrate Exited (0)                                                                   |
-| Playwright completo con E2E_AUTH=1, E2E_MAILPIT=1 e base URL Docker     | **30/30 PASS, nessuno skip**; desktop/tablet/mobile, polling incluso                                                                |
-| Riavvio storage/API/web                                                 | PASS: stessa sessione e post leggibili, hash SHA-256 dei byte immagine identico prima/dopo; probe rimosso                           |
-| UI                                                                      | Screenshot a 1440×900, 768×1024 e 390×844; assenza overflow verificata, ricerca con immagine e notifiche desktop/mobile ispezionate |
+Playwright usa API/PG/S3/SMTP reali e crea esclusivamente account sintetici. Il ruolo moderatore di ciascun test è revocato; verificato **0 moderatori di test residui**. Screenshot nuovi account/moderazione prodotti nelle tre viewport; ispezionati anche visivamente su mobile e desktop. Report HTML in `playwright-report`, screenshot/export sintetici in `test-results`, output Go in `.local/go-test-sprint5.jsonl`; tutti ignorati da Git.
 
-Go copre rigetto SVG/MIME falso/dimensioni/descrizioni/file corrotti, ricodifica, bucket anonimo negato, bozze private, allegati non riusabili/scaduti, quota concorrente, FTS/cursori/edit/blocchi e notifiche idempotenti/atomiche/read. Rollback 004 conserva gli sprint precedenti; test distruttivi solo su schemi isolati nel database `radura_test`. S3 di test nel bucket separato `radura-tests` con pulizia oggetti. Log JSON del run Go in `.local/go-test-sprint4.jsonl`, ignorato da Git.
+Problemi emersi e risolti: tre regressioni iniziali dei contratti/rollback e ordine di validazione media; nomi accessibili dei select corretti dopo timeout E2E; interruzione di una prima prova browser sovrapposta alla pausa backup, poi prove separate; format inizialmente impedito dall'ACL dei backup, corretto usando glob sulle sole sorgenti. La suite finale sopra è passata senza retry applicativi fittizi o limiti disabilitati. Gli helper rispettano Retry-After reale.
 
-Playwright mantiene le regressioni precedenti e verifica upload/recupero bozza dopo refresh, naturale larghezza dell'immagine servita da S3, ricerca post/persone, cinque notifiche, stato letto dopo reload e blocchi su contenuti/ricerca/notifiche. Per il polling accelera soltanto l'orologio Chromium; HTTP, DB e storage restano reali. Nessun mock/intercettazione delle API. Report/screenshot in `playwright-report/` e `test-results/`, ignorati. Fixture paesaggio 600×360 originale generata proceduralmente, nessun asset proprietario.
+## Limiti e attività successive
 
-Iterazioni risolte: qualifica delle colonne SQL nelle query lettura notifiche; guardia null TypeScript nel badge. Download SDK inizialmente impedito dal sandbox di rete, poi eseguito con autorizzazione automatica; Docker/Chromium usati fuori dal sandbox Windows. I limiti auth restano attivi e i test rispettano Retry-After. Nessun errore funzionale lasciato nascosto.
+- **Nessuna dichiarazione di conformità o prontezza pubblica.** Titolare, contatti, basi giuridiche, notice esterne, comunicazioni agli autori e ricorsi da definire con consulenza. Account sospesi richiedono assistenza esterna al login ordinario.
+- Export automatico limitato a 100 MiB immagini/32 MiB JSON/10.000 righe per categoria, oltre limite 413 e gestione assistita da predisporre. Un crash può lasciare un ZIP temporaneo da rimuovere operativamente.
+- Tombstone/UUID e parte di report/audit restano pseudonimi; i testi liberi richiedono minimizzazione e revisione. Report aperti richiedono esame umano.
+- Backup privati locali, senza cifratura automatica o copia fuori macchina. Retention dei backup gestita al successivo comando riuscito; dump manuali esclusi. Manca un registro esterno durevole per riapplicare cancellazioni dopo un vero disaster recovery.
+- Quote peer Next condivise, antispam essenziale, nessun CAPTCHA/MFA. Coda email non durevole e verifica email non obbligatoria nell'anteprima.
+- CI aggiornata ma **non eseguita su GitHub**; race detector Linux configurato, non eseguito nella shell Windows. Nessun penetration test indipendente, load test o deploy effettuato.
+- La revisione automatica delle approvazioni ha rifiutato lo smoke manuale `-maintenance` / `-reconcile-media` sui dati persistenti correnti: queste operazioni possono eliminare irreversibilmente dati scaduti e oggetti S3. Nessun aggiramento: lo smoke finale è di sola lettura. Sweep, retry, retention e riconciliazione sono verificati su schemi e oggetti di test separati. L'esecuzione manuale sui dati correnti richiede autorizzazione specifica del gestore.
 
-## Limiti e prossimo passo
-
-- Niente media video/GIF/WebP o upload avatar/banner; avatar a iniziali. Testo post obbligatorio, allegati immutabili. Orientamento EXIF non interpretato.
-- Nessun purge/retention o riconciliazione S3 durevole: crash e rollback possono lasciare oggetti orfani. Soft delete conserva i byte e la quota; predisporre retention e backup/restore di DB **e** storage prima della beta.
-- FTS essenziale senza stemming/rimozione accenti/ranking; nessun load test. Quota per peer condivisa dietro Next e non distribuita.
-- Polling, niente SSE/push/menzioni. Aggiornamento pagina notifiche dalla prima pagina, anche dopo caricamento di pagine precedenti.
-- Restano i limiti SMTP dello Sprint 2: cattura locale, coda in memoria, verifica email non obbligatoria nell'anteprima.
-- **CI GitHub Actions remota/race detector Linux non eseguiti.** Workflow estesi a SeaweedFS e integrazione S3; nessun push/deploy. Sicurezza operativa, GDPR, moderazione e audit restano allo Sprint 5.
-
-Aprire <http://localhost:3000>, accedere e provare Aggiungi immagine, [Esplora](http://localhost:3000/search) e [Notifiche](http://localhost:3000/notifications). Mailpit resta su <http://localhost:8025>. Servizi lasciati attivi. Riavvio: `docker compose up --build -d --wait`; arresto senza perdita dati: `docker compose stop`. Non sovrascrivere `.env`.
-
-Prossimo incremento: **Sprint 5, sicurezza/GDPR/moderazione**, su richiesta. Contratti/setup nel README, politiche nell'[architettura Sprint 4](architecture/sprint-4.md), provenienza/stati nella [matrice UI](reverse-engineering/sprint-4-matrix.md).
+Prossimo passo operativo: il gestore sceglie un proprio handle esistente e assegna il ruolo con `docker compose exec api /api -role-user HANDLE -role moderator -reason "Assegnazione approvata dal gestore locale."`, poi prova `/moderation`. Concordare la revisione dei limiti sopra prima di autorizzare lo Sprint 6. Il sito rimane su **http://localhost:3000**, Mailpit su **http://localhost:8025**.

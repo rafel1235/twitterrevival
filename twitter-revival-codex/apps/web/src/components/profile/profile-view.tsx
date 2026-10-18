@@ -9,6 +9,7 @@ import { useSession } from "@/components/auth/session-provider";
 import { SessionGate, PageError, UserAvatar } from "./shared";
 import { ConnectionList } from "./connections";
 import { PostList } from "@/components/posts/post-list";
+import { ReportButton } from "@/components/safety/report-button";
 import styles from "./profile.module.css";
 
 export function ProfileView({
@@ -209,6 +210,7 @@ function ProfileContent({
             </button>
           </div>
         )}
+        {!profile.is_self && <ReportButton type="user" id={profile.id} />}
       </section>
       <nav className={styles.tabs} aria-label="Sezioni profilo">
         <Link href={base} aria-current={!kind ? "page" : undefined}>

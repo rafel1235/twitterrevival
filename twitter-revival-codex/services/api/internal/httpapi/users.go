@@ -18,7 +18,8 @@ func (s *Server) requireUser(next http.Handler) http.Handler {
 			s.handleError(w, err)
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userContextKey{}, user)))
+		r = r.WithContext(context.WithValue(r.Context(), userContextKey{}, user))
+		next.ServeHTTP(w, r)
 	})
 }
 func currentUser(r *http.Request) auth.User {

@@ -24,6 +24,7 @@ type User struct {
 	CreatedAt     time.Time `json:"created_at"`
 	EmailVerified bool      `json:"email_verified"`
 	AvatarStyle   string    `json:"avatar_style"`
+	Role          string    `json:"role"`
 }
 
 type Account struct {
@@ -62,7 +63,7 @@ func (r *PostgresRepository) Register(ctx context.Context, input NewUser, sessio
 		}
 		return User{}, err
 	}
-	user := User{ID: row.ID, Handle: row.Handle, Email: row.Email, DisplayName: input.DisplayName, CreatedAt: row.CreatedAt.Time.UTC(), AvatarStyle: "sage"}
+	user := User{ID: row.ID, Handle: row.Handle, Email: row.Email, DisplayName: input.DisplayName, CreatedAt: row.CreatedAt.Time.UTC(), AvatarStyle: "sage", Role: "member"}
 	if err = queries.InsertProfile(ctx, db.InsertProfileParams{UserID: user.ID, DisplayName: input.DisplayName}); err != nil {
 		return User{}, err
 	}
@@ -77,7 +78,7 @@ func (r *PostgresRepository) Register(ctx context.Context, input NewUser, sessio
 
 func (r *PostgresRepository) FindAccount(ctx context.Context, email string) (Account, error) {
 	row, err := db.New(r.Pool).FindAccount(ctx, email)
-	a := Account{User: User{ID: row.ID, Handle: row.Handle, Email: row.Email, DisplayName: row.DisplayName, CreatedAt: row.CreatedAt.Time.UTC(), EmailVerified: row.EmailVerified, AvatarStyle: row.AvatarStyle}, PasswordHash: row.PasswordHash, Status: row.Status}
+	a := Account{User: User{ID: row.ID, Handle: row.Handle, Email: row.Email, DisplayName: row.DisplayName, CreatedAt: row.CreatedAt.Time.UTC(), EmailVerified: row.EmailVerified, AvatarStyle: row.AvatarStyle, Role: row.Role}, PasswordHash: row.PasswordHash, Status: row.Status}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return a, ErrUnauthorized
 	}
@@ -109,7 +110,7 @@ func (r *PostgresRepository) CreateSession(ctx context.Context, userID string, s
 
 func (r *PostgresRepository) SessionUser(ctx context.Context, hash []byte) (User, error) {
 	row, err := db.New(r.Pool).FindSessionUser(ctx, hash)
-	u := User{ID: row.ID, Handle: row.Handle, Email: row.Email, DisplayName: row.DisplayName, CreatedAt: row.CreatedAt.Time.UTC(), EmailVerified: row.EmailVerified, AvatarStyle: row.AvatarStyle}
+	u := User{ID: row.ID, Handle: row.Handle, Email: row.Email, DisplayName: row.DisplayName, CreatedAt: row.CreatedAt.Time.UTC(), EmailVerified: row.EmailVerified, AvatarStyle: row.AvatarStyle, Role: row.Role}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return u, ErrUnauthorized
 	}

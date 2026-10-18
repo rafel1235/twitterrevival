@@ -351,6 +351,11 @@ func TestConcurrentMediaAttachmentAndSprint4Rollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := f.post(ca, "Conservato dopo rollback", "", "")
+	for v := migrations.CurrentVersion; v > 4; v-- {
+		if err := migrations.Run(ctx, f.pool, "down"); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err := migrations.Run(ctx, f.pool, "down"); err != nil {
 		t.Fatal(err)
 	}
@@ -359,7 +364,12 @@ func TestConcurrentMediaAttachmentAndSprint4Rollback(t *testing.T) {
 	if version != 3 {
 		t.Fatal("wrong rollback version")
 	}
-	f.call("GET", "/api/v1/auth/me", "", ca, 200)
+	// Auth queries use the current role column; schema rollback is a coordinated
+	// binary downgrade, so verify raw session preservation until re-upgrading.
+	var sessions int
+	if err := f.pool.QueryRow(ctx, "SELECT count(*) FROM sessions").Scan(&sessions); err != nil || sessions == 0 {
+		t.Fatal("session lost", err)
+	}
 	if err := migrations.Run(ctx, f.pool, "up"); err != nil {
 		t.Fatal(err)
 	}

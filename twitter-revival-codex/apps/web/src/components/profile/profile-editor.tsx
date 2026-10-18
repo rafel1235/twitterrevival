@@ -7,6 +7,7 @@ import type { Profile } from "@/lib/profile";
 import { useSession } from "@/components/auth/session-provider";
 import { SessionGate, PageError, UserAvatar, LocalMailbox } from "./shared";
 import styles from "./profile.module.css";
+import { SettingsNav } from "@/components/safety/settings-nav";
 
 export function ProfileEditor() {
   const { user } = useSession();
@@ -31,6 +32,7 @@ function EditorLoader({ handle }: { handle: string }) {
           Utenti bloccati
         </Link>
       </header>
+      <SettingsNav />
       {resource.error ? (
         <PageError
           message={resource.error}

@@ -322,8 +322,12 @@ func TestPostsMigrationConstraintsAndRollback(t *testing.T) {
 	if err := f.pool.QueryRow(ctx, "SELECT max(version) FROM schema_migrations").Scan(&version); err != nil || version != 2 {
 		t.Fatal("down removed previous schema", err)
 	}
-	f.call("GET", "/api/v1/auth/me", "", ca, 200)
-	f.call("GET", "/api/v1/users/"+a.Handle, "", ca, 200)
+	// An old schema requires its matching API binary. Verify preserved identity
+	// and session rows directly before upgrading the schema again.
+	var preserved bool
+	if err := f.pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users u JOIN profiles p ON p.user_id=u.id JOIN sessions s ON s.user_id=u.id WHERE u.id=$1)", a.ID).Scan(&preserved); err != nil || !preserved {
+		t.Fatal("identity/session lost on rollback", err)
+	}
 	if err := migrations.Run(ctx, f.pool, "up"); err != nil {
 		t.Fatal(err)
 	}

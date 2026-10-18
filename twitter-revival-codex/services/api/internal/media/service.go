@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"radura.local/api/internal/auth"
 	"radura.local/api/internal/db"
+	"radura.local/api/internal/safety"
 	"strings"
 	"time"
 )
@@ -149,6 +150,9 @@ func (s *Service) Delete(ctx context.Context, actor, id string) error {
 	}
 	defer tx.Rollback(ctx)
 	q := db.New(tx)
+	if err = safety.LockActive(ctx, q, actor); err != nil {
+		return err
+	}
 	rows, err := q.LockMedia(ctx, []string{id})
 	if err != nil {
 		return err
@@ -172,5 +176,6 @@ func (s *Service) Delete(ctx context.Context, actor, id string) error {
 	if err = s.repo.Store.Delete(ctx, rows[0].StorageKey); err != nil {
 		return ErrStorage
 	}
-	return nil
+	_, err = s.repo.Pool.Exec(ctx, "UPDATE media SET purged_at=now(),alt_text='Immagine rimossa' WHERE id=$1", id)
+	return err
 }

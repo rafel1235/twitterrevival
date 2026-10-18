@@ -12,7 +12,7 @@ import (
 )
 
 const findAccount = `-- name: FindAccount :one
-SELECT u.id,u.handle,u.email,p.display_name,p.avatar_style,u.created_at,u.password_hash,u.status,(u.email_verified_at IS NOT NULL)::boolean AS email_verified
+SELECT u.id,u.handle,u.email,p.display_name,p.avatar_style,u.created_at,u.password_hash,u.status,u.role,(u.email_verified_at IS NOT NULL)::boolean AS email_verified
 FROM users u JOIN profiles p ON p.user_id=u.id WHERE u.email=$1
 `
 
@@ -25,6 +25,7 @@ type FindAccountRow struct {
 	CreatedAt     pgtype.Timestamptz
 	PasswordHash  string
 	Status        string
+	Role          string
 	EmailVerified bool
 }
 
@@ -40,13 +41,14 @@ func (q *Queries) FindAccount(ctx context.Context, email string) (FindAccountRow
 		&i.CreatedAt,
 		&i.PasswordHash,
 		&i.Status,
+		&i.Role,
 		&i.EmailVerified,
 	)
 	return i, err
 }
 
 const findSessionUser = `-- name: FindSessionUser :one
-SELECT u.id,u.handle,u.email,p.display_name,p.avatar_style,u.created_at,(u.email_verified_at IS NOT NULL)::boolean AS email_verified
+SELECT u.id,u.handle,u.email,p.display_name,p.avatar_style,u.created_at,u.role,(u.email_verified_at IS NOT NULL)::boolean AS email_verified
 FROM sessions s JOIN users u ON u.id=s.user_id JOIN profiles p ON p.user_id=u.id
 WHERE s.token_hash=$1 AND s.revoked_at IS NULL AND s.expires_at>now() AND u.status='active'
 `
@@ -58,6 +60,7 @@ type FindSessionUserRow struct {
 	DisplayName   string
 	AvatarStyle   string
 	CreatedAt     pgtype.Timestamptz
+	Role          string
 	EmailVerified bool
 }
 
@@ -71,6 +74,7 @@ func (q *Queries) FindSessionUser(ctx context.Context, tokenHash []byte) (FindSe
 		&i.DisplayName,
 		&i.AvatarStyle,
 		&i.CreatedAt,
+		&i.Role,
 		&i.EmailVerified,
 	)
 	return i, err

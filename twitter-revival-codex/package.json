@@ -14,8 +14,8 @@
     "start": "npm run start -w apps/web",
     "lint": "npm run lint -w apps/web",
     "typecheck": "npm run typecheck -w apps/web",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format": "prettier --write \"{apps,docs,infra,scripts,.github}/**/*.{ts,tsx,css,json,md,mjs,yaml,yml}\" \"*.{json,ts,mjs,md,yaml,yml}\"",
+    "format:check": "prettier --check \"{apps,docs,infra,scripts,.github}/**/*.{ts,tsx,css,json,md,mjs,yaml,yml}\" \"*.{json,ts,mjs,md,yaml,yml}\"",
     "test:smoke": "playwright test",
     "test:e2e": "playwright test --grep @auth"
   },

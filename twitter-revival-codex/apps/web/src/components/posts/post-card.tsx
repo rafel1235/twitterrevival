@@ -7,6 +7,7 @@ import { UserAvatar } from "@/components/profile/shared";
 import { Icon } from "@/components/layout/icon";
 import { PostComposer } from "./composer";
 import { Attachments } from "./attachments";
+import { ReportButton } from "@/components/safety/report-button";
 import styles from "./posts.module.css";
 
 export function Reference({
@@ -231,6 +232,7 @@ export function PostCard({
             {error}
           </p>
         )}
+        {!post.is_own && <ReportButton type="post" id={post.id} />}
       </div>
     </article>
   );

@@ -11,6 +11,7 @@ import (
 	"radura.local/api/internal/auth"
 	"radura.local/api/internal/db"
 	"radura.local/api/internal/media"
+	"radura.local/api/internal/safety"
 	"radura.local/api/internal/users"
 )
 
@@ -124,6 +125,12 @@ func lockTarget(ctx context.Context, q *db.Queries, actor, id string) (db.LockPo
 	if err != nil {
 		return db.LockPostRow{}, mapError(err)
 	}
+	if err = safety.LockActive(ctx, q, actor, author); err != nil {
+		if errors.Is(err, auth.ErrUnauthorized) {
+			return db.LockPostRow{}, ErrNotFound
+		}
+		return db.LockPostRow{}, err
+	}
 	if err = q.LockUserPair(ctx, db.LockUserPairParams{ActorID: actor, TargetID: author}); err != nil {
 		return db.LockPostRow{}, err
 	}
@@ -148,9 +155,7 @@ func (r *Repository) Create(ctx context.Context, actor string, in CreateInput) (
 		if _, err = single(ctx, q, actor, target); err != nil {
 			return Post{}, err
 		}
-	}
-	id, err := q.InsertPost(ctx, db.InsertPostParams{AuthorID: actor, Body: in.Body, ReplyID: in.ReplyToID, QuoteID: in.QuoteOfID})
-	if err != nil {
+	} else if err = safety.LockActive(ctx, q, actor); err != nil {
 		return Post{}, err
 	}
 	if len(in.MediaIDs) > 0 {
@@ -176,10 +181,21 @@ func (r *Repository) Create(ctx context.Context, actor string, in CreateInput) (
 				return Post{}, invalid()
 			}
 		}
-		for i, mediaID := range in.MediaIDs {
-			if err = q.AttachMedia(ctx, db.AttachMediaParams{PostID: id, MediaID: mediaID, Position: int32(i)}); err != nil {
-				return Post{}, err
-			}
+	}
+	duplicate, err := q.RecentDuplicatePost(ctx, db.RecentDuplicatePostParams{AuthorID: actor, Body: in.Body, ReplyID: in.ReplyToID, QuoteID: in.QuoteOfID})
+	if err != nil {
+		return Post{}, err
+	}
+	if duplicate {
+		return Post{}, safety.ErrSpam
+	}
+	id, err := q.InsertPost(ctx, db.InsertPostParams{AuthorID: actor, Body: in.Body, ReplyID: in.ReplyToID, QuoteID: in.QuoteOfID})
+	if err != nil {
+		return Post{}, err
+	}
+	for i, mediaID := range in.MediaIDs {
+		if err = q.AttachMedia(ctx, db.AttachMediaParams{PostID: id, MediaID: mediaID, Position: int32(i)}); err != nil {
+			return Post{}, err
 		}
 	}
 	post, err := single(ctx, q, actor, id)
@@ -230,7 +246,12 @@ func (r *Repository) Mutate(ctx context.Context, actor, id, action, body string)
 	if err != nil {
 		return Post{}, err
 	}
-	if action == "delete" && row.AuthorID == actor && row.DeletedAt.Valid {
+	if action == "delete" && row.AuthorID == actor {
+		if !row.DeletedAt.Valid {
+			if err = q.DeleteOwnPost(ctx, db.DeleteOwnPostParams{PostID: id, AuthorID: actor}); err != nil {
+				return Post{}, err
+			}
+		}
 		return Post{}, tx.Commit(ctx)
 	}
 	if _, err = single(ctx, q, actor, id); err != nil {

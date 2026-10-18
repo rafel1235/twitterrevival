@@ -1,8 +1,13 @@
-# Radura · Sprint 4
+# Radura · Sprint 5
 
 Social indipendente, nome interno **Twitter Revival**. Brand, testi, icone SVG e illustrazioni CSS originali. Nessuna affiliazione con Twitter/X, nessuno scraping o asset proprietario. Account, profili, follow, blocchi, post e interazioni sono reali e persistenti. La home autenticata mostra il feed cronologico dei seguiti e i propri post. Senza accesso compare solo un'anteprima esplicitamente **Demo**.
 
-## Usare lo Sprint 4
+## Usare lo Sprint 5
+
+- **Segnala post/profilo**: apri il controllo sotto un contenuto altrui, scegli motivo e dettagli; l'esito compare in **Impostazioni → Segnalazioni**.
+- **Moderazione** (`/moderation`): coda, oscuramento/ripristino post, sospensione/riattivazione account e audit. Ruolo assegnato solo con CLI locale esplicita, vedi sotto.
+- **Impostazioni → I tuoi dati**: ZIP reale con JSON e immagini, oppure cancellazione definitiva confermata da password e parola ELIMINA. Nessun dato simulato.
+- **Backup e restore**: `./scripts/backup-verify.ps1` prova una copia isolata di database e storage; nessun restore sui dati attivi. I tempi tecnici di conservazione sono spiegati in `/privacy` e nella documentazione.
 
 - Sito: **http://localhost:3000**. Gli account creati nello Sprint 1 restano validi.
 - **Home dopo l'accesso**: pubblica fino a 280 code point Unicode. “Aggiorna” legge i nuovi post; “Carica altri post” prosegue con il cursore. Il feed include post propri e dei seguiti, risposte, citazioni e repost, in ordine cronologico.
@@ -110,7 +115,7 @@ npm run start
 
 `004_discovery_media.up.sql` aggiunge media/post_media, notifiche con trigger/view, campo generato FTS e indice GIN. Conserva post e interazioni esistenti; nessun backfill delle notifiche storiche.
 
-Il runner incorpora SQL, registra `schema_migrations` e acquisisce un advisory lock transazionale. `up` applica le versioni pendenti; `down` annulla **solo l'ultima**. Versioni sconosciute/non contigue rifiutate. Il primo rollback annulla la 004 (metadati media, notifiche e FTS), preservando gli sprint precedenti; non cancella gli oggetti S3. I successivi annullano 003, 002 e 001, eliminando i rispettivi dati. Usare API ferme e backup:
+Il runner incorpora SQL, registra `schema_migrations` e acquisisce un advisory lock transazionale. `up` applica le versioni pendenti; `down` annulla **solo l'ultima**. Versioni sconosciute/non contigue rifiutate. Il primo rollback annulla la 005: elimina report/audit/quote/ruoli e rimuove l'oscuramento, preservando account/post/media. Richiede il binario dello sprint precedente e API ferme; non recupera dati già cancellati dalla manutenzione. I successivi annullano 004, 003, 002 e 001 con perdita dei rispettivi dati. Salvare un backup prima:
 
 ```sh
 cd services/api
@@ -118,7 +123,7 @@ go run ./cmd/server -migrate=down
 go run ./cmd/server -migrate=up
 ```
 
-`citext` resta al rollback perché potrebbe essere condivisa. Query parametrizzate in `db/queries/`, codice tipizzato generato con **sqlc 1.31.1** in `internal/db`. Per rigenerare, da `services/api`: `sqlc generate`. API con schema versione **4**; healthcheck su DB/schema e S3. Test rollback su schemi isolati, senza azzerare il sito.
+`citext` resta al rollback perché potrebbe essere condivisa. Query parametrizzate in `db/queries/`, codice tipizzato generato con **sqlc 1.31.1** in `internal/db`. Per rigenerare, da `services/api`: `sqlc generate`. API con schema versione **5**; healthcheck su DB/schema e S3. Test rollback su schemi isolati, senza azzerare il sito.
 
 ## Contratto HTTP
 
@@ -195,7 +200,7 @@ Le liste accettano `limit` (1–50, default 20) e `cursor`; risposta `{"data":{"
 
 La card restituisce `id`, `author` (id/handle/display_name/avatar_style), `body`, `created_at`, `updated_at`, `is_own`, `liked`, `reposted`, i quattro contatori `likes_count`, `reposts_count`, `replies_count`, `quotes_count` e gli eventuali `reply_to_id`/`quote_of_id`. `reply_to` e `quote_of` contengono una preview visibile di un solo livello, oppure null. Non includono email o credenziali. I contatori e gli incorporamenti rispettano blocchi e account inattivi.
 
-Testo da 1 a 280 code point Unicode dopo trim, newline/tab ammessi; controlli vietati. Client e server contano nello stesso modo. Modificare il testo mantiene l'ordine originale; la UI indica “Modificato”. Riferimenti e autore sono immutabili. Le citazioni richiedono un commento proprio; per ripubblicare senza commento usare repost. Un originale cancellato o bloccato è oscurato nelle citazioni/risposte di autori ancora visibili. Un blocco conserva le vecchie righe like/repost, ma le filtra; dopo sblocco possono riapparire. DELETE conserva il corpo nel DB e nei backup: retention e cancellazione GDPR sono ancora da implementare.
+Testo da 1 a 280 code point Unicode dopo trim, newline/tab ammessi; controlli vietati. Client e server contano nello stesso modo. Modificare il testo mantiene l'ordine originale; la UI indica “Modificato”. Riferimenti e autore sono immutabili. Le citazioni richiedono un commento proprio; per ripubblicare senza commento usare repost. Un originale cancellato, oscurato o bloccato è nascosto nelle citazioni/risposte altrui. Un blocco conserva le vecchie righe like/repost, ma le filtra; dopo sblocco possono riapparire. Il singolo DELETE mantiene il testo per 30 giorni, poi la manutenzione lo sostituisce; cancellazione account immediata del testo. Copie di backup con retention separata.
 
 “Aggiorna” o refresh legge le azioni effettuate da un'altra sessione. Dopo una propria mutazione le liste ripartono dalla prima pagina; nessuna sincronizzazione realtime in questo sprint. Per transazioni, lock e politiche complete: [architettura Sprint 3](docs/architecture/sprint-3.md).
 
@@ -223,7 +228,40 @@ Ricerca: q di 2–100 code point, limite 20/max 50 e cursori esistenti. Post tra
 
 Notifiche atomiche per nuove azioni follow/like/repost/reply/quote, senza notifiche verso sé stessi o retroattive. DTO: `id,type,actor,post_id?,created_at,read_at` nullable. Cursori e limite 20/max 50. Undo, cancellazione post o blocco rimuovono le notifiche collegate; sblocco senza ripristino. Filtri di visibilità a ogni lettura. Polling 30 secondi con scheda visibile; lista riletta dalla prima pagina. Quota mutazioni stato lettura 60/minuto per peer.
 
-Purge S3 e riconciliazione orfani ancora non automatici. Soft delete conserva dati/immagini, conteggiati nella quota. Avatar restano placeholder; niente video, WebP o upload profilo. Transazioni e limiti in [architettura Sprint 4](docs/architecture/sprint-4.md).
+Purge S3 ora durevole e automatico: bozze 24h, singoli post eliminati 30 giorni, account eliminato coda immediata. Riconciliazione di oggetti senza metadati tramite CLI esplicita. Avatar restano placeholder; niente video, WebP o upload profilo. Dettagli aggiornati nell'[architettura Sprint 5](docs/architecture/sprint-5.md).
+
+## API e comandi aggiunti nello Sprint 5
+
+Sessione obbligatoria. Mutazioni con JSON e `Origin`/`X-CSRF-Protection: 1`. Campi sconosciuti rifiutati.
+
+| Metodo e percorso                                | Input / risposta                                                                                                                                                                                       |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `POST /api/v1/reports`                           | `{target_type: "post"\|"user", target_id, reason, details}` → 201 `data.id`; motivo `spam\|harassment\|illegal\|other`, dettagli 10–2000 code point. Report aperto duplicato restituisce lo stesso ID. |
+| `GET /api/v1/reports`                            | Solo segnalazioni proprie: `data.items,next_cursor?`; filtro `status=open\|resolved\|dismissed`, limit/cursor.                                                                                         |
+| `GET /api/v1/moderation/reports`                 | Coda ed evidenze; solo moderatori, stessi filtri/cursori.                                                                                                                                              |
+| `POST /api/v1/moderation/reports/{id}/decisions` | `{action,reason}` → 204; motivo 10–2000 caratteri. Azioni `dismiss,hide_post,restore_post,suspend_user,restore_user`.                                                                                  |
+| `GET /api/v1/moderation/audit`                   | Audit paginato `data.items,next_cursor?`; solo moderatori.                                                                                                                                             |
+| `POST /api/v1/account/export`                    | `{password}` → ZIP `data.json` + immagini proprie, no-store; password errata 403.                                                                                                                      |
+| `DELETE /api/v1/account`                         | `{password,confirmation:"ELIMINA"}` → 204; revoca sessioni, pulisce dati e accoda purge media.                                                                                                         |
+
+I DTO auth includono `role: member|moderator`. Nessuna assegnazione dal client. Per abilitare **un handle esistente scelto dal gestore** (sostituire HANDLE, nessuna password universale):
+
+```sh
+docker compose exec api /api -role-user HANDLE -role moderator -reason "Assegnazione del ruolo approvata dal gestore locale."
+# Per revocare: stesso comando con -role member e motivazione.
+docker compose exec api /api -maintenance
+docker compose exec api /api -reconcile-media
+```
+
+Ogni cambio ruolo è registrato nell'audit. Ricaricare la pagina dopo l'assegnazione; aprire http://localhost:3000/moderation. `-maintenance` segnala eliminazioni S3 ancora pendenti; retry automatico ogni minuto. `-reconcile-media` elimina solo orfani oltre 24h senza record DB.
+
+Export automatico: massimo 100 MiB immagini, 32 MiB JSON, 10.000 elementi per categoria; superamento 413 senza troncamenti. File temporaneo eliminato dopo la risposta. Testo eliminato dall'account subito, tombstone UUID conservati per i riferimenti; report/audit limitati secondo policy provvisoria. Nessuna promessa di cancellazione istantanea dai backup.
+
+```powershell
+./scripts/backup-verify.ps1
+```
+
+Breve pausa delle scritture, dump PostgreSQL e snapshot SeaweedFS; restore in rete/volumi separati, confronto SHA-256 di tutte le righe e immagini, ricevuta e pulizia dei soli volumi temporanei. Cartella privata `.local/backups/sprint5`, esclusa da Git. Procedura e limiti: [backup/restore](docs/operations/backup-restore.md). [Review rischi](docs/security/sprint-5-review.md) e [bozza privacy/DSA](docs/legal/privacy-dsa-review.md) da rivedere prima del lancio; nessuna dichiarazione di conformità.
 
 ## Email e recupero password
 
@@ -245,7 +283,7 @@ Il recupero accoda il lavoro prima del lookup dell’email, così account noti e
 
 Le mutazioni social hanno quota separata di 60/minuto per peer; verifica e recupero 10/minuto. Valgono lo stesso limite di body, origin esatto e header anti-CSRF. Follow e blocchi sono serializzati nel DB mediante advisory lock della coppia; lo sblocco non ripristina relazioni. La sessione del frontend viene invalidata su 401 e le risposte precedenti a logout/reset non possono ripristinare un utente in cache.
 
-Scritture post: quota separata 90/minuto per peer e controlli Origin/CSRF. Interazioni/blocchi acquisiscono lock per coppia e poi post; visibilità ricontrollata nella transazione. Letture multiple post/notifiche in snapshot coerente; immagini protette dalla sessione anche in download. Moderazione, retention ed esportazione/cancellazione dati restano allo Sprint 5; nessuna promessa di uso pubblico o deploy.
+Restano le quote per peer e i controlli Origin/CSRF degli sprint precedenti. In più quote persistenti al minuto per account: 30 pubblicazioni, 20 operazioni media, 10 report, 3 export, 5 tentativi cancellazione, 120 altre scritture. Auth 30/minuto per peer anche dopo riavvio. Duplicati testuali sullo stesso riferimento rifiutati per 10 minuti (409); 429 con Retry-After per quota. Next condivide il peer: limite conservativo, X-Forwarded-For non attendibile. Lock account ordinati prima di coppia/post; cancellazioni e sospensioni seguono lo stesso ordine. Log inattesi solo per classe, senza errori driver o path grezzi. [Politiche complete](docs/architecture/sprint-5.md).
 
 ## Verifiche riproducibili
 
@@ -291,7 +329,7 @@ go test -count=1 -v ./...
 
 I test creano/rimuovono schemi isolati e usano il bucket separato `radura-tests`, con pulizia degli oggetti creati. Senza `TEST_S3_ENDPOINT` i test media reali sono esplicitamente saltati; senza `TEST_DATABASE_URL` viene saltata l'integrazione PostgreSQL. Non usare database/bucket di produzione. PowerShell: `$env:TEST_S3_ENDPOINT='http://127.0.0.1:8333'` e analogamente le altre variabili. Go non carica automaticamente `.env`.
 
-La suite Playwright comprende ora anche upload S3, rifiuto di SVG mascherato, recupero bozza dopo refresh, immagini nei risultati, ricerca persone, notifiche lette persistite e blocchi su download/ricerca/notifiche. Il polling automatico viene provato accelerando l'orologio del browser: API, database e storage rimangono reali. Screenshot risultati/notifiche nelle tre viewport. Fixture PNG originale del progetto, descritta nella matrice UI Sprint 4.
+La suite Playwright comprende upload S3, rifiuto SVG mascherato, recupero bozza, ricerca/notifiche e blocchi, più report, decisioni/ripristino/audit, ZIP con immagini e cancellazione account. Il polling è provato accelerando solo l'orologio browser; API/DB/S3 reali. La prova moderatore crea un proprio account, assegna/revoca il ruolo con CLI locale; non tocca report preesistenti. In Compose usa `docker compose exec`; per API native impostare `E2E_API_CLI` al binario compilato (CI: `services/api/server`) con `DATABASE_URL` appropriato. Non avviare backup/pausa API durante gli E2E. Screenshot nelle tre viewport; fixture PNG originale. Le esportazioni nei risultati E2E contengono esclusivamente dati sintetici del test.
 
 Entrambi i workflow CI avviano anche SeaweedFS 4.48 e impostano `TEST_S3_ENDPOINT`, con credenziali esclusivamente locali di test. Il workflow nella root Git effettiva resta `../.github/workflows/radura-ci.yml`; il template interno serve per un repository autonomo. Pipeline remota non ancora eseguita.
 
@@ -303,6 +341,7 @@ apps/web/src/components/          layout, auth, anteprima anonima demo
 apps/web/src/components/posts/    composer, card, feed e conversazioni reali
 apps/web/src/components/profile/  profilo, editor, connessioni, blocchi, persone
 apps/web/src/components/discovery/ ricerca e notifiche
+apps/web/src/components/safety/   report, moderazione e gestione dati
 apps/web/tests/                   smoke, auth, identità, post e feed reali
 services/api/cmd/server/          API e comandi migrazione/healthcheck
 services/api/internal/auth/       servizio e repository PostgreSQL
@@ -311,6 +350,10 @@ services/api/internal/posts/      CRUD, interazioni, feed e visibilità
 services/api/internal/media/      validazione, ricodifica, repository e S3
 services/api/internal/search/     validazione query e pattern letterali
 services/api/internal/notifications/ elenco, conteggi e lettura
+services/api/internal/moderation/ report, decisioni, audit e CLI ruoli
+services/api/internal/privacy/    ZIP, cancellazione e purge durevole
+services/api/internal/safety/     lock account e quote persistenti
+services/api/internal/backup/     manifest SHA-256 di tabelle e immagini
 services/api/internal/mailer/     invio SMTP con timeout e STARTTLS
 services/api/internal/httpapi/    handler, CSRF, rate limit, test
 services/api/internal/db/         query Go generate da sqlc
@@ -319,6 +362,8 @@ services/api/migrations/          schema, rollback, runner embedded
 docs/                            architettura, provenienza UI, stato verifiche
 .github/workflows/ci.yml          pipeline
 compose.yaml                     db/storage/mailpit → migrate → api → web
+infra/restore.compose.yaml       copia isolata per verifica restore
+scripts/backup-verify.ps1         snapshot, restore e verifica locale
 ```
 
-Esiti e file dello Sprint 4 nel [registro](docs/implementation-status.md), politiche nell'[architettura Sprint 4](docs/architecture/sprint-4.md). Il prossimo incremento è Sprint 5 (sicurezza, GDPR e moderazione), solo su richiesta. Nessuna funzione futura presentata come pronta.
+Esiti e file dello Sprint 5 nel [registro](docs/implementation-status.md), politiche nell'[architettura Sprint 5](docs/architecture/sprint-5.md). Il prossimo incremento è Sprint 6 (beta a inviti), solo su richiesta: nessun deploy, servizio a pagamento o funzione futura presentata come pronta.

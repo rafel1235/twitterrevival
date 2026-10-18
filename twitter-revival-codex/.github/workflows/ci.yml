@@ -1,4 +1,4 @@
-name: Sprint 4 checks
+name: Sprint 5 checks
 on: [push, pull_request]
 permissions:
   contents: read
@@ -26,6 +26,7 @@ jobs:
       COOKIE_SECURE: "false"
       E2E_AUTH: "1"
       E2E_MAILPIT: "1"
+      E2E_API_CLI: services/api/server
       SMTP_ADDR: 127.0.0.1:1025
       SMTP_FROM: Radura <no-reply@radura.test>
       SMTP_STARTTLS: "false"

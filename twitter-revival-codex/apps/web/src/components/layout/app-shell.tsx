@@ -163,7 +163,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </Link>
         </nav>
         <div className="sprint-note">
-          <span className="status-dot" /> Sprint 4 · Nuove prospettive
+          <span className="status-dot" /> Sprint 5 · Uno spazio più sicuro
         </div>
         <AccountPanel />
         <p className="independent-note">
@@ -224,16 +224,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
           <div className="milestone">
-            <span className="milestone-number current">04</span>
+            <span className="milestone-number">04</span>
             <div>
               <strong>Nuove prospettive</strong>
-              <p>Immagini, ricerca e notifiche · Sprint attuale</p>
+              <p>Immagini, ricerca e notifiche · Completato</p>
+            </div>
+          </div>
+          <div className="milestone">
+            <span className="milestone-number current">05</span>
+            <div>
+              <strong>Uno spazio più sicuro</strong>
+              <p>Moderazione e controllo dei dati · Sprint attuale</p>
             </div>
           </div>
         </section>
         <p className="right-footer">
           Anteprima di sviluppo · La timeline autenticata contiene post reali.
-          Nessuna affiliazione con Twitter o X.
+          Nessuna affiliazione con Twitter o X.{" "}
+          <Link href="/privacy">Dati e sicurezza</Link>
         </p>
       </aside>
       <nav className="mobile-nav" aria-label="Navigazione mobile">

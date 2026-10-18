@@ -34,7 +34,7 @@ func (q *Queries) DeleteDraftMedia(ctx context.Context, id string) error {
 }
 
 const getReadableMedia = `-- name: GetReadableMedia :one
-SELECT m.id, m.owner_id, m.storage_key, m.mime_type, m.bytes, m.width, m.height, m.alt_text, m.created_at, m.deleted_at FROM media m JOIN users owner ON owner.id=m.owner_id
+SELECT m.id, m.owner_id, m.storage_key, m.mime_type, m.bytes, m.width, m.height, m.alt_text, m.created_at, m.deleted_at, m.purged_at FROM media m JOIN users owner ON owner.id=m.owner_id
 WHERE m.id=$1::uuid AND m.deleted_at IS NULL AND owner.status='active'
 AND EXISTS(SELECT 1 FROM users WHERE id=$2::uuid AND status='active')
 AND ((m.owner_id=$2::uuid AND NOT EXISTS(SELECT 1 FROM post_media pm WHERE pm.media_id=m.id))
@@ -60,12 +60,13 @@ func (q *Queries) GetReadableMedia(ctx context.Context, arg GetReadableMediaPara
 		&i.AltText,
 		&i.CreatedAt,
 		&i.DeletedAt,
+		&i.PurgedAt,
 	)
 	return i, err
 }
 
 const insertMedia = `-- name: InsertMedia :one
-INSERT INTO media(owner_id,storage_key,mime_type,bytes,width,height,alt_text) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id, owner_id, storage_key, mime_type, bytes, width, height, alt_text, created_at, deleted_at
+INSERT INTO media(owner_id,storage_key,mime_type,bytes,width,height,alt_text) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id, owner_id, storage_key, mime_type, bytes, width, height, alt_text, created_at, deleted_at, purged_at
 `
 
 type InsertMediaParams struct {
@@ -100,12 +101,13 @@ func (q *Queries) InsertMedia(ctx context.Context, arg InsertMediaParams) (Mediu
 		&i.AltText,
 		&i.CreatedAt,
 		&i.DeletedAt,
+		&i.PurgedAt,
 	)
 	return i, err
 }
 
 const listDraftMedia = `-- name: ListDraftMedia :many
-SELECT m.id, m.owner_id, m.storage_key, m.mime_type, m.bytes, m.width, m.height, m.alt_text, m.created_at, m.deleted_at FROM media m WHERE m.owner_id=$1 AND m.deleted_at IS NULL
+SELECT m.id, m.owner_id, m.storage_key, m.mime_type, m.bytes, m.width, m.height, m.alt_text, m.created_at, m.deleted_at, m.purged_at FROM media m WHERE m.owner_id=$1 AND m.deleted_at IS NULL
 AND NOT EXISTS(SELECT 1 FROM post_media pm WHERE pm.media_id=m.id)
 ORDER BY m.created_at DESC,m.id DESC LIMIT 12
 `
@@ -130,6 +132,7 @@ func (q *Queries) ListDraftMedia(ctx context.Context, ownerID string) ([]Medium,
 			&i.AltText,
 			&i.CreatedAt,
 			&i.DeletedAt,
+			&i.PurgedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -192,7 +195,7 @@ func (q *Queries) ListPostMedia(ctx context.Context, arg ListPostMediaParams) ([
 }
 
 const lockMedia = `-- name: LockMedia :many
-SELECT id, owner_id, storage_key, mime_type, bytes, width, height, alt_text, created_at, deleted_at FROM media WHERE id=ANY($1::uuid[]) ORDER BY id FOR UPDATE
+SELECT id, owner_id, storage_key, mime_type, bytes, width, height, alt_text, created_at, deleted_at, purged_at FROM media WHERE id=ANY($1::uuid[]) ORDER BY id FOR UPDATE
 `
 
 func (q *Queries) LockMedia(ctx context.Context, ids []string) ([]Medium, error) {
@@ -215,6 +218,7 @@ func (q *Queries) LockMedia(ctx context.Context, ids []string) ([]Medium, error)
 			&i.AltText,
 			&i.CreatedAt,
 			&i.DeletedAt,
+			&i.PurgedAt,
 		); err != nil {
 			return nil, err
 		}
