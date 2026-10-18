@@ -2,8 +2,11 @@
 **/.next
 .git
 .env
+**/.env*
+**/*.tsbuildinfo
 .local
 .tools
 test-results
 playwright-report
+playwright-report-https
 docs

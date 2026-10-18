@@ -1,5 +1,7 @@
 # Radura · Sprint 6 — beta locale a inviti
 
+**Dominio e server:** predisposti i file separati per un VPS e HTTPS pubblico, con riferimento al dominio scelto `raduraapp.it`. Acquisto, DNS e deploy ancora da eseguire; l’ambiente locale resta invariato. Vedi [proposta, costi e procedura server](docs/operations/domain-server.md). Verifica dei nuovi file: `npm run test:deployment`. Il Compose server parte in manutenzione fino alla preparazione della beta remota.
+
 Social indipendente, nome interno **Twitter Revival**. Brand, testi, icone SVG e illustrazioni CSS originali. Nessuna affiliazione con Twitter/X, nessuno scraping o asset proprietario. Account, profili, follow, blocchi, post e interazioni sono reali e persistenti. La home autenticata mostra il feed cronologico dei seguiti e i propri post. Senza accesso compare solo un'anteprima esplicitamente **Demo**.
 
 ## Avvio della beta locale con HTTPS

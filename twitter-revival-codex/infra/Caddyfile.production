@@ -1,0 +1,23 @@
+{
+	admin off
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+		X-Robots-Tag "noindex, nofollow"
+	}
+	@private path /metrics /metrics/* /healthz
+	respond @private 404
+	@closed expression {$PUBLIC_BETA_ENABLED:false} != true
+	respond @closed "Radura: beta privata in preparazione." 503
+	reverse_proxy web:3000
+}
+
+# Container health only; this port is never published.
+http://:8080 {
+	respond /healthz 200
+}
