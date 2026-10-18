@@ -1,4 +1,4 @@
-name: Sprint 2 checks
+name: Sprint 3 checks
 on: [push, pull_request]
 permissions:
   contents: read

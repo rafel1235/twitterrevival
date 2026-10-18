@@ -1,10 +1,12 @@
-# Radura · Sprint 2
+# Radura · Sprint 3
 
-Social indipendente, nome interno **Twitter Revival**. Brand, testi, icone SVG e illustrazioni CSS originali. Nessuna affiliazione con Twitter/X, nessuno scraping o asset proprietario. Account, profili, follow e blocchi sono reali. I tre post della home sono etichettati **Demo**; composer e interazioni sui post restano disabilitati fino allo Sprint 3.
+Social indipendente, nome interno **Twitter Revival**. Brand, testi, icone SVG e illustrazioni CSS originali. Nessuna affiliazione con Twitter/X, nessuno scraping o asset proprietario. Account, profili, follow, blocchi, post e interazioni sono reali e persistenti. La home autenticata mostra il feed cronologico dei seguiti e i propri post. Senza accesso compare solo un'anteprima esplicitamente **Demo**.
 
-## Usare lo Sprint 2
+## Usare lo Sprint 3
 
 - Sito: **http://localhost:3000**. Gli account creati nello Sprint 1 restano validi.
+- **Home dopo l'accesso**: pubblica fino a 280 code point Unicode. “Aggiorna” legge i nuovi post; “Carica altri post” prosegue con il cursore. Il feed include post propri e dei seguiti, risposte, citazioni e repost, in ordine cronologico.
+- **Post**: apri il testo/data per la conversazione; rispondi, metti/rimuovi mi piace, ripubblica/annulla repost o cita con un tuo commento. Puoi modificare solo il testo dei tuoi post ed eliminarli con conferma. I post restano dopo refresh/riavvio.
 - **Impostazioni**: modifica nome, bio, località, sito e colore dell’avatar a iniziali; verifica email e accedi alla gestione dei blocchi.
 - **Profilo**: contatori reali e liste follower/seguiti. **Persone** apre un profilo tramite handle esatto; la ricerca per parole chiave resta allo Sprint 4.
 - **Segui / Non seguire più** e **Blocca / Sblocca** persistono nel database. Un blocco rimuove i follow reciproci e nasconde entrambi i profili. Sbloccare non ripristina i follow.
@@ -84,7 +86,9 @@ npm run start
 
 `001_auth.up.sql` crea `users`, `profiles`, `sessions`: CITEXT case-insensitive, UUID, foreign key con cascade, check di formato/dimensione/status/scadenza, indici e timestamp UTC (`TIMESTAMPTZ`). Utente, profilo e prima sessione vengono creati in una singola transazione. `002_identity_social.up.sql` aggiunge avatar_style, follows, blocks e auth_tokens, preservando gli account e le sessioni esistenti.
 
-Il runner incorpora i file SQL nel binario, registra le versioni in `schema_migrations` e acquisisce un advisory lock transazionale. `up` applica tutte le versioni pendenti; `down` annulla **solo l’ultima versione**. Versioni sconosciute o non contigue sono rifiutate. Il rollback della 002 elimina connessioni e token email; una seconda esecuzione annulla la 001 e cancella anche l’autenticazione. Eseguire rollback solo con API ferma e backup adeguato:
+`003_posts.up.sql` aggiunge posts, likes, reposts, view di visibilità e indici per feed/risposte. Conserva tutti gli account, le sessioni e le connessioni esistenti.
+
+Il runner incorpora i file SQL nel binario, registra le versioni in `schema_migrations` e acquisisce un advisory lock transazionale. `up` applica tutte le versioni pendenti; `down` annulla **solo l’ultima versione**. Versioni sconosciute o non contigue sono rifiutate. Il primo rollback annulla la 003 ed elimina i post e le interazioni; il successivo annulla la 002 (connessioni e token email); il terzo annulla la 001 e cancella l'autenticazione. Eseguire rollback solo con API ferma e backup adeguato:
 
 ```sh
 cd services/api
@@ -92,7 +96,7 @@ go run ./cmd/server -migrate=down
 go run ./cmd/server -migrate=up
 ```
 
-`citext` è mantenuta al rollback perché potrebbe essere condivisa. Query parametrizzate in `db/queries/{auth,users,account_tokens}.sql`, codice tipizzato generato con **sqlc 1.31.1** in `internal/db` e usato dai repository. Per rigenerare, dalla directory `services/api`: `sqlc generate`. L’API richiede schema versione 2 prima di avviarsi. I test di upgrade/rollback usano schemi isolati; il database del sito non viene azzerato.
+`citext` è mantenuta al rollback perché potrebbe essere condivisa. Query parametrizzate in `db/queries/{auth,users,account_tokens,posts}.sql`, codice tipizzato generato con **sqlc 1.31.1** in `internal/db` e usato dai repository. Per rigenerare, dalla directory `services/api`: `sqlc generate`. L’API richiede schema versione **3** prima di avviarsi. I test di upgrade/rollback usano schemi isolati; il database del sito non viene azzerato.
 
 ## Contratto HTTP
 
@@ -147,6 +151,32 @@ Il profilo restituisce `id`, `handle`, `display_name`, `bio`, `avatar_style`, `l
 
 Le liste accettano `limit` (1–50, default 20) e `cursor` restituito dalla pagina precedente; risposta `{"data":{"users":[...],"next_cursor":"..."}}`, senza next_cursor alla fine. Ordine `created_at DESC, id DESC`; contatori e liste escludono account inattivi e relazioni bloccate per il visitatore. Per dettagli e scelte: [architettura Sprint 2](docs/architecture/sprint-2.md).
 
+## API aggiunte nello Sprint 3
+
+Tutti gli endpoint seguenti richiedono una sessione valida, anche in lettura. Le mutazioni richiedono gli header Origin/CSRF e JSON descritti sopra.
+
+| Metodo e percorso                   | Input / risultato                                                                                                         |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/posts`                | `{body, reply_to_id?, quote_of_id?}` → 201, `Location` e `data.post`. Testo obbligatorio; al massimo uno dei riferimenti. |
+| `GET /api/v1/posts/{id}`            | 200 con `data.post`; 404 per assente/cancellato/bloccato/inattivo.                                                        |
+| `PATCH /api/v1/posts/{id}`          | `{body}` → 200; solo proprietario e solo testo, 403 se appartiene ad altri.                                               |
+| `DELETE /api/v1/posts/{id}`         | `{}` → 204; soft delete, ripetibile dal proprietario.                                                                     |
+| `POST /api/v1/posts/{id}/likes`     | `{}` → 200 con card aggiornata; idempotente.                                                                              |
+| `DELETE /api/v1/posts/{id}/likes`   | `{}` → 200 con card aggiornata; idempotente.                                                                              |
+| `POST /api/v1/posts/{id}/reposts`   | `{}` → 200 con card aggiornata; idempotente.                                                                              |
+| `DELETE /api/v1/posts/{id}/reposts` | `{}` → 200 con card aggiornata; idempotente.                                                                              |
+| `GET /api/v1/posts/{id}/replies`    | Risposte dirette visibili, paginate; 404 se l'originale non è visibile.                                                   |
+| `GET /api/v1/feed/home`             | Eventi propri e dei seguiti, inclusi repost.                                                                              |
+| `GET /api/v1/users/{id}/posts`      | Post e repost del profilo visibile.                                                                                       |
+
+Le liste accettano `limit` (1–50, default 20) e `cursor`; risposta `{"data":{"items":[{"id":"event-uuid","created_at":"UTC","post":{},"reposted_by":{}}],"next_cursor":"..."}}`. `reposted_by` compare solo per i repost, `next_cursor` solo quando serve. Ordine discendente per data e UUID dell'evento, senza ranking. Originale e repost sono eventi distinti: un post può apparire due volte se si seguono entrambi gli autori dell'evento. Le risposte usano lo stesso envelope, senza `reposted_by`.
+
+La card restituisce `id`, `author` (id/handle/display_name/avatar_style), `body`, `created_at`, `updated_at`, `is_own`, `liked`, `reposted`, i quattro contatori `likes_count`, `reposts_count`, `replies_count`, `quotes_count` e gli eventuali `reply_to_id`/`quote_of_id`. `reply_to` e `quote_of` contengono una preview visibile di un solo livello, oppure null. Non includono email o credenziali. I contatori e gli incorporamenti rispettano blocchi e account inattivi.
+
+Testo da 1 a 280 code point Unicode dopo trim, newline/tab ammessi; controlli vietati. Client e server contano nello stesso modo. Modificare il testo mantiene l'ordine originale; la UI indica “Modificato”. Riferimenti e autore sono immutabili. Le citazioni richiedono un commento proprio; per ripubblicare senza commento usare repost. Un originale cancellato o bloccato è oscurato nelle citazioni/risposte di autori ancora visibili. Un blocco conserva le vecchie righe like/repost, ma le filtra; dopo sblocco possono riapparire. DELETE conserva il corpo nel DB e nei backup: retention e cancellazione GDPR sono ancora da implementare.
+
+“Aggiorna” o refresh legge le azioni effettuate da un'altra sessione. Dopo una propria mutazione le liste ripartono dalla prima pagina; nessuna sincronizzazione realtime in questo sprint. Per transazioni, lock e politiche complete: [architettura Sprint 3](docs/architecture/sprint-3.md).
+
 ## Email e recupero password
 
 Compose include Mailpit **1.31.6**, con interfaccia HTTP su loopback 8025 e SMTP su loopback 1025. Dall’API in container il server è `mailpit:1025`; con Go nativo il default è `127.0.0.1:1025`. `SMTP_FROM`, `SMTP_ADDR`, `SMTP_STARTTLS`, `SMTP_USERNAME`, `SMTP_PASSWORD` sono configurabili per l’avvio nativo. Compose è un ambiente locale con cattura email, senza relay Internet.
@@ -167,7 +197,7 @@ Il recupero accoda il lavoro prima del lookup dell’email, così account noti e
 
 Le mutazioni social hanno quota separata di 60/minuto per peer; verifica e recupero 10/minuto. Valgono lo stesso limite di body, origin esatto e header anti-CSRF. Follow e blocchi sono serializzati nel DB mediante advisory lock della coppia; lo sblocco non ripristina relazioni. La sessione del frontend viene invalidata su 401 e le risposte precedenti a logout/reset non possono ripristinare un utente in cache.
 
-Moderazione, cancellazione/esportazione dati e motore post restano negli sprint dedicati. Non è un servizio pronto per il pubblico. Nessun deploy incluso.
+Le scritture post hanno quota separata di 90/minuto per peer e gli stessi controlli Origin/CSRF. Interazioni e blocchi acquisiscono il medesimo lock per coppia, poi il lock del post; la visibilità viene ricontrollata nella transazione. Ogni lettura multipla usa uno snapshot coerente e filtra anche i contenuti incorporati. Moderazione, esportazione/cancellazione dati e media restano negli sprint dedicati. Non è un servizio pronto per il pubblico. Nessun deploy incluso.
 
 ## Verifiche riproducibili
 
@@ -185,7 +215,7 @@ go build ./cmd/server
 
 Con PostgreSQL dedicato, esportare `TEST_DATABASE_URL` prima di `go test`: i test reali creano uno schema isolato e lo eliminano alla fine; **non** usare un database di produzione. Richiedono permessi `CREATE SCHEMA` e `CREATE EXTENSION citext`. Senza variabile il test di integrazione è esplicitamente saltato. Il ciclo include hash password/token, case-insensitive conflict, sessione dopo nuova istanza, scadenza, sospensione, logout, constraint, atomicità e rollback/up delle migrazioni.
 
-Playwright avvia `npm run start`, quindi serve prima `npm run build`. Con API e database attivi:
+Playwright avvia `npm run start`, quindi serve prima `npm run build`. Gli helper auth rispettano eventuali 429 attendendo il `Retry-After` del server: i limiti rimangono attivi anche nei test. La suite può quindi richiedere oltre un minuto. Con API e database attivi:
 
 ```sh
 npx playwright install chromium
@@ -194,7 +224,7 @@ E2E_AUTH=1 E2E_MAILPIT=1 npm run test:smoke
 
 PowerShell: `$env:E2E_AUTH='1'; $env:E2E_MAILPIT='1'; npm run test:smoke`. Per verificare lo stack Compose già avviato impostare anche `$env:PLAYWRIGHT_BASE_URL='http://localhost:3000'` (disabilita il webServer automatico). `E2E_AUTH` abilita i cicli reali auth/social; `E2E_MAILPIT` abilita il ciclo verifica/reset tramite SMTP reale. Senza le rispettive variabili i test dipendenti sono esplicitamente saltati. `MAILPIT_URL` può cambiare l’URL della casella per i test (default http://localhost:8025).
 
-Screenshot a 1440×900, 768×1024, 390×844 in `test-results/`; report con `npx playwright show-report`. La suite include persistenza del profilo e avatar, validazione Unicode, nomi di 50 caratteri e bio di 160 emoji senza overflow, follow/unfollow reciproci, blocco/sblocco, verifica email, password reset e revoca dei cookie precedenti. Nessun mock/intercettazione delle API nei test browser.
+Screenshot a 1440×900, 768×1024, 390×844 in `test-results/`; report con `npx playwright show-report`. La suite mantiene auth, profili/avatar, follow/blocchi e SMTP dello Sprint 2. Aggiunge pubblicazione con 280 emoji (281 rifiutate), modifica e cancellazione proprie, testo HTML innocuo, like/repost, risposta/citazione, oscuramento dopo blocco e persistenza dopo refresh. La paginazione oltre 20 eventi viene verificata anche nella viewport desktop. Nessun mock/intercettazione delle API nei test browser. I test Go aggiungono vincoli SQL, cursori a timestamp uguali, inserimenti fra pagine, account sospesi e scritture concorrenti con blocco/cancellazione.
 
 La CI GitHub Actions avvia PostgreSQL e Mailpit, esegue format/lint/tipi/build, Go vet/test con race detector e il ciclo Playwright completo. `.github/workflows/ci.yml` serve per pubblicare questa directory come repository autonomo; `../.github/workflows/radura-ci.yml` è il workflow nella root Git effettiva della cartella contenitore `twitter revival`, con working-directory e cache configurate per il progetto annidato. L’esecuzione remota richiede pubblicare il repository e non viene dichiarata verificata localmente.
 
@@ -202,12 +232,14 @@ La CI GitHub Actions avvia PostgreSQL e Mailpit, esegue format/lint/tipi/build, 
 
 ```text
 apps/web/src/app/                 pagine App Router e design token
-apps/web/src/components/          layout, auth, timeline demo
+apps/web/src/components/          layout, auth, anteprima anonima demo
+apps/web/src/components/posts/    composer, card, feed e conversazioni reali
 apps/web/src/components/profile/  profilo, editor, connessioni, blocchi, persone
-apps/web/tests/                   smoke e percorso auth reale
+apps/web/tests/                   smoke, auth, identità, post e feed reali
 services/api/cmd/server/          API e comandi migrazione/healthcheck
 services/api/internal/auth/       servizio e repository PostgreSQL
 services/api/internal/users/      profili e grafo sociale
+services/api/internal/posts/      CRUD, interazioni, feed e visibilità
 services/api/internal/mailer/     invio SMTP con timeout e STARTTLS
 services/api/internal/httpapi/    handler, CSRF, rate limit, test
 services/api/internal/db/         query Go generate da sqlc
@@ -218,4 +250,4 @@ docs/                            architettura, provenienza UI, stato verifiche
 compose.yaml                     db/mailpit → migrate → api → web
 ```
 
-Compose è stato avviato e verificato localmente con database, API, web e Mailpit sani; migrazione completata con exit 0. Esiti e file dello Sprint 2 in [docs/implementation-status.md](docs/implementation-status.md). Il prossimo incremento è Sprint 3 per post e timeline reale, solo su richiesta.
+Esiti effettivi e file dello Sprint 3 in [docs/implementation-status.md](docs/implementation-status.md). Il prossimo incremento è Sprint 4 (media, ricerca e notifiche), solo su richiesta. Nessuna funzione futura viene presentata come pronta.

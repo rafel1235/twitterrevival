@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { submitAuth } from "./helpers";
 
 test("home responsive, demo esplicita e composer disabilitato", async ({
   page,
@@ -50,6 +51,7 @@ test("@auth registrazione, refresh, logout e login su PostgreSQL reale", async (
     process.env.E2E_AUTH !== "1",
     "Richiede API e PostgreSQL reali; impostare E2E_AUTH=1.",
   );
+  test.setTimeout(150000);
   const handle = `e2e_${Date.now().toString(36)}_${testInfo.project.name.slice(0, 1)}`;
   const email = `${handle}@example.test`;
   const password = "e2e password lunga 🔐";
@@ -59,7 +61,9 @@ test("@auth registrazione, refresh, logout e login su PostgreSQL reale", async (
   await page.getByLabel("Handle", { exact: true }).fill(handle);
   await page.getByLabel("Email", { exact: true }).fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
-  await page.getByRole("button", { name: "Crea account", exact: true }).click();
+  await submitAuth(page, "register", () =>
+    page.getByRole("button", { name: "Crea account", exact: true }).click(),
+  );
   await expect(page).toHaveURL("/");
   await expect(page.getByTestId("session-name")).toHaveText(name);
   const cookie = (await context.cookies()).find((value) =>
@@ -69,7 +73,9 @@ test("@auth registrazione, refresh, logout e login su PostgreSQL reale", async (
   expect(cookie?.sameSite).toBe("Lax");
   await page.reload();
   await expect(page.getByTestId("session-name")).toHaveText(name);
-  await page.getByRole("button", { name: "Esci", exact: true }).click();
+  await submitAuth(page, "logout", () =>
+    page.getByRole("button", { name: "Esci", exact: true }).click(),
+  );
   await expect(
     page.getByRole("button", { name: "Esci", exact: true }),
   ).toHaveCount(0);
@@ -77,19 +83,25 @@ test("@auth registrazione, refresh, logout e login su PostgreSQL reale", async (
   await page.goto("/login");
   await page.getByLabel("Email", { exact: true }).fill(email);
   await page.getByLabel("Password", { exact: true }).fill("a wrong password");
-  await page.getByRole("button", { name: "Accedi", exact: true }).click();
+  await submitAuth(page, "login", () =>
+    page.getByRole("button", { name: "Accedi", exact: true }).click(),
+  );
   await expect(
     page.getByRole("form", { name: "Accesso" }).getByRole("alert"),
   ).toContainText("Credenziali");
   await page.getByLabel("Password", { exact: true }).fill(password);
-  await page.getByRole("button", { name: "Accedi", exact: true }).click();
+  await submitAuth(page, "login", () =>
+    page.getByRole("button", { name: "Accedi", exact: true }).click(),
+  );
   await expect(page).toHaveURL("/");
   await expect(page.getByTestId("session-name")).toHaveText(name);
   await page.screenshot({
     path: testInfo.outputPath(`authenticated-${testInfo.project.name}.png`),
     fullPage: true,
   });
-  await page.getByRole("button", { name: "Esci", exact: true }).click();
+  await submitAuth(page, "logout", () =>
+    page.getByRole("button", { name: "Esci", exact: true }).click(),
+  );
   await expect(
     page.getByRole("button", { name: "Esci", exact: true }),
   ).toHaveCount(0);

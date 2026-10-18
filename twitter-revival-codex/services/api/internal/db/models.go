@@ -30,6 +30,49 @@ type Follow struct {
 	CreatedAt  pgtype.Timestamptz
 }
 
+type Like struct {
+	UserID    string
+	PostID    string
+	CreatedAt pgtype.Timestamptz
+}
+
+type Post struct {
+	ID         string
+	AuthorID   string
+	Body       string
+	ReplyToID  pgtype.UUID
+	QuoteOfID  pgtype.UUID
+	Visibility string
+	CreatedAt  pgtype.Timestamptz
+	UpdatedAt  pgtype.Timestamptz
+	DeletedAt  pgtype.Timestamptz
+}
+
+type PostAudience struct {
+	ViewerID string
+	PostID   string
+}
+
+type PostCard struct {
+	ViewerID     string
+	ID           string
+	AuthorID     string
+	Body         string
+	CreatedAt    pgtype.Timestamptz
+	UpdatedAt    pgtype.Timestamptz
+	ReplyToID    string
+	QuoteOfID    string
+	Handle       string
+	DisplayName  string
+	AvatarStyle  string
+	LikesCount   int64
+	RepostsCount int64
+	RepliesCount int64
+	QuotesCount  int64
+	Liked        bool
+	Reposted     bool
+}
+
 type Profile struct {
 	UserID       string
 	DisplayName  string
@@ -39,6 +82,13 @@ type Profile struct {
 	LocationText string
 	WebsiteUrl   pgtype.Text
 	AvatarStyle  string
+}
+
+type Repost struct {
+	ID        string
+	UserID    string
+	PostID    string
+	CreatedAt pgtype.Timestamptz
 }
 
 type Session struct {

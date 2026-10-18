@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSession } from "@/components/auth/session-provider";
 import { Icon } from "@/components/layout/icon";
+import { HomeTimeline } from "@/components/posts/home-timeline";
 
 const posts = [
   {
@@ -35,7 +36,16 @@ const posts = [
 ];
 
 export function Timeline() {
-  const { user } = useSession();
+  const { user, loading } = useSession();
+  if (loading)
+    return (
+      <p className="feed-end" role="status">
+        Caricamento timeline…
+      </p>
+    );
+  return user ? <HomeTimeline key={user.id} /> : <DemoTimeline />;
+}
+function DemoTimeline() {
   return (
     <>
       <header className="feed-header">
@@ -53,29 +63,25 @@ export function Timeline() {
       </div>
       <section
         className="composer"
-        aria-label="Composer disponibile in Sprint 3"
+        aria-label="Composer dimostrativo: accedi per pubblicare"
       >
         <span className="avatar sage" aria-hidden="true">
-          {user ? Array.from(user.display_name)[0] : <Icon name="leaf" />}
+          <Icon name="leaf" />
         </span>
         <div className="composer-body">
           <label className="sr-only" htmlFor="post-body">
-            Nuovo post, disponibile in Sprint 3
+            Nuovo post, accedi per pubblicare
           </label>
           <textarea
             id="post-body"
-            placeholder={
-              user
-                ? `Cosa ti passa per la testa, ${user.display_name}?`
-                : "Cosa ti passa per la testa?"
-            }
+            placeholder="Cosa ti passa per la testa?"
             disabled
             rows={2}
           />
           <div className="composer-bottom">
             <span>
               <Icon name="image" size={20} />
-              <small>Disponibile in Sprint 3</small>
+              <small>Accedi per pubblicare</small>
             </span>
             <button className="button primary" disabled>
               Pubblica
@@ -90,8 +96,8 @@ export function Timeline() {
         <div>
           <strong>Un assaggio di quello che verrà.</strong>
           <p>
-            Feed demo con persone e post inventati. Pubblicazione e interazioni
-            saranno disponibili in Sprint 3.
+            Feed demo con persone e post inventati. Accedi per pubblicare,
+            interagire e leggere la tua timeline reale.
           </p>
         </div>
       </div>
@@ -116,14 +122,14 @@ export function Timeline() {
               )}
               <div
                 className="post-actions"
-                aria-label="Interazioni dimostrative, disponibili in Sprint 3"
+                aria-label="Interazioni dimostrative: accedi per partecipare"
               >
                 {(["reply", "repeat", "heart", "share"] as const).map(
                   (name, index) => (
                     <button
                       key={name}
                       disabled
-                      aria-label={`${["Rispondi", "Ripubblica", "Mi piace", "Condividi"][index]}: disponibile in Sprint 3`}
+                      aria-label={`${["Rispondi", "Ripubblica", "Mi piace", "Condividi"][index]}: dimostrazione`}
                     >
                       <Icon name={name} size={18} />
                       <span>—</span>
@@ -139,9 +145,8 @@ export function Timeline() {
         <Icon name="leaf" size={30} />
         <h2>C’è spazio anche per te.</h2>
         <p>Il prossimo passo è conoscerci.</p>
-        <Link href={user ? "/login" : "/register"} className="text-button">
-          {user ? "Il tuo account" : "Crea il tuo account"}{" "}
-          <Icon name="arrow" size={16} />
+        <Link href="/register" className="text-button">
+          Crea il tuo account <Icon name="arrow" size={16} />
         </Link>
       </section>
     </>

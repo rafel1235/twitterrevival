@@ -150,7 +150,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </Link>
         </nav>
         <div className="sprint-note">
-          <span className="status-dot" /> Sprint 2 · Incontriamoci
+          <span className="status-dot" /> Sprint 3 · Conversiamo
         </div>
         <AccountPanel />
         <p className="independent-note">
@@ -200,22 +200,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
           <div className="milestone">
-            <span className="milestone-number current">02</span>
+            <span className="milestone-number">02</span>
             <div>
               <strong>Incontriamoci</strong>
-              <p>Profili e connessioni · Sprint attuale</p>
+              <p>Profili e connessioni · Completato</p>
             </div>
           </div>
           <div className="milestone">
-            <span className="milestone-number">03</span>
+            <span className="milestone-number current">03</span>
             <div>
               <strong>Inizia la conversazione</strong>
-              <p>Post e timeline · Sprint 3</p>
+              <p>Post e timeline reali · Sprint attuale</p>
             </div>
           </div>
         </section>
         <p className="right-footer">
-          Anteprima di sviluppo · Nessun dato demo appartiene a persone reali.
+          Anteprima di sviluppo · La timeline autenticata contiene post reali.
           Nessuna affiliazione con Twitter o X.
         </p>
       </aside>

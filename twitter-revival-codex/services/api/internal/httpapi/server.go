@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"radura.local/api/internal/auth"
+	"radura.local/api/internal/posts"
 	"radura.local/api/internal/users"
 )
 
@@ -31,6 +32,7 @@ type Server struct {
 	limiter    *Limiter
 	users      *users.Service
 	accounts   *auth.AccountService
+	posts      *posts.Service
 }
 type apiError struct {
 	Code    string            `json:"code"`
@@ -44,6 +46,7 @@ func WithUsers(service *users.Service) Option { return func(s *Server) { s.users
 func WithAccounts(service *auth.AccountService) Option {
 	return func(s *Server) { s.accounts = service }
 }
+func WithPosts(service *posts.Service) Option { return func(s *Server) { s.posts = service } }
 
 func New(service *auth.Service, cfg Config, healthy func(context.Context) error, options ...Option) (http.Handler, error) {
 	origin, err := url.Parse(cfg.Origin)
@@ -87,6 +90,7 @@ func New(service *auth.Service, cfg Config, healthy func(context.Context) error,
 	router.Route("/api/v1/users", func(r chi.Router) {
 		r.Use(s.requireUser)
 		r.Get("/me/blocks", s.blockedUsers)
+		r.Get("/{id}/posts", func(w http.ResponseWriter, r *http.Request) { s.postList(w, r, "profile") })
 		r.Get("/{handle}", s.profile)
 		r.Get("/{id}/followers", func(w http.ResponseWriter, r *http.Request) { s.connections(w, r, "followers") })
 		r.Get("/{id}/following", func(w http.ResponseWriter, r *http.Request) { s.connections(w, r, "following") })
@@ -99,6 +103,22 @@ func New(service *auth.Service, cfg Config, healthy func(context.Context) error,
 			m.Delete("/{id}/block", func(w http.ResponseWriter, r *http.Request) { s.relationship(w, r, "unblock") })
 		})
 	})
+	router.Route("/api/v1/posts", func(r chi.Router) {
+		r.Use(s.requireUser)
+		r.Get("/{id}", s.getPost)
+		r.Get("/{id}/replies", func(w http.ResponseWriter, r *http.Request) { s.postList(w, r, "replies") })
+		r.Group(func(m chi.Router) {
+			m.Use(s.originCheck, NewLimiter(90, time.Minute, 4096).Middleware)
+			m.Post("/", s.createPost)
+			m.Patch("/{id}", func(w http.ResponseWriter, r *http.Request) { s.mutatePost(w, r, "edit") })
+			m.Delete("/{id}", func(w http.ResponseWriter, r *http.Request) { s.mutatePost(w, r, "delete") })
+			m.Post("/{id}/likes", func(w http.ResponseWriter, r *http.Request) { s.mutatePost(w, r, "like") })
+			m.Delete("/{id}/likes", func(w http.ResponseWriter, r *http.Request) { s.mutatePost(w, r, "unlike") })
+			m.Post("/{id}/reposts", func(w http.ResponseWriter, r *http.Request) { s.mutatePost(w, r, "repost") })
+			m.Delete("/{id}/reposts", func(w http.ResponseWriter, r *http.Request) { s.mutatePost(w, r, "unrepost") })
+		})
+	})
+	router.With(s.requireUser).Get("/api/v1/feed/home", func(w http.ResponseWriter, r *http.Request) { s.postList(w, r, "home") })
 	router.NotFound(func(w http.ResponseWriter, r *http.Request) { fail(w, 404, "not_found", "Endpoint inesistente.", nil) })
 	router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 		fail(w, 405, "method_not_allowed", "Metodo non consentito.", nil)
@@ -127,6 +147,10 @@ func (s *Server) handleError(w http.ResponseWriter, err error) {
 		fail(w, 401, "unauthorized", "Credenziali o sessione non valide.", nil)
 	case errors.Is(err, users.ErrNotFound):
 		fail(w, 404, "profile_not_found", "Profilo non disponibile.", nil)
+	case errors.Is(err, posts.ErrNotFound):
+		fail(w, 404, "post_not_found", "Post non disponibile.", nil)
+	case errors.Is(err, posts.ErrForbidden):
+		fail(w, 403, "post_forbidden", "Puoi modificare o eliminare solo i tuoi post.", nil)
 	case errors.Is(err, users.ErrBlocked):
 		fail(w, 403, "relationship_blocked", "Questa connessione non è consentita.", nil)
 	case errors.Is(err, auth.ErrInvalidToken):

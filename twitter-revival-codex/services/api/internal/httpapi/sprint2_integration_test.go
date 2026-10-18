@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"radura.local/api/internal/auth"
 	"radura.local/api/internal/mailer"
+	"radura.local/api/internal/posts"
 	"radura.local/api/internal/users"
 	"radura.local/api/migrations"
 )
@@ -92,7 +93,7 @@ func newSprintFixture(t *testing.T, emails bool) *sprintFixture {
 		t.Fatal(err)
 	}
 	people := users.NewService(&users.Repository{Pool: pool})
-	options := []Option{WithUsers(people)}
+	options := []Option{WithUsers(people), WithPosts(posts.NewService(&posts.Repository{Pool: pool}))}
 	f := &sprintFixture{t: t, pool: pool, people: people}
 	if emails {
 		f.mail = &capturingSender{make(chan mailer.Message, 16)}
@@ -409,8 +410,8 @@ func TestExpiredAccountTokenAndMigrationUpgrade(t *testing.T) {
 		t.Fatal(err)
 	}
 	var version int
-	if err := f.pool.QueryRow(ctx, "SELECT max(version) FROM schema_migrations").Scan(&version); err != nil || version != 1 {
-		t.Fatal("down should remove only version 2", err)
+	if err := f.pool.QueryRow(ctx, "SELECT max(version) FROM schema_migrations").Scan(&version); err != nil || version != migrations.CurrentVersion-1 {
+		t.Fatal("down should remove only the latest version", err)
 	}
 	if err := migrations.Run(ctx, f.pool, "up"); err != nil {
 		t.Fatal(err)

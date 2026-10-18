@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
+import { registerAccount, submitAuth } from "./helpers";
 
 const password = "identity password sicura 🔐";
 async function register(
@@ -8,9 +9,11 @@ async function register(
 ) {
   const handle = `${tag}_${Date.now().toString(36)}`;
   const email = `${handle}@example.test`;
-  const response = await client.post("/api/v1/auth/register", {
-    headers: { Origin: origin, "X-CSRF-Protection": "1" },
-    data: { handle, email, display_name: handle, password },
+  const response = await registerAccount(client, origin, {
+    handle,
+    email,
+    display_name: handle,
+    password,
   });
   expect(response.status()).toBe(201);
   const payload = await response.json();
@@ -38,6 +41,7 @@ test("@auth profilo persistente, follow reciproci e blocco reale", async ({
   baseURL,
 }, testInfo) => {
   test.skip(process.env.E2E_AUTH !== "1", "Richiede API e PostgreSQL reali.");
+  test.setTimeout(150000);
   const origin = baseURL!;
   const a = await register(context.request, origin, "graph_a");
   const other = await browser.newContext({ baseURL: origin });
@@ -212,6 +216,7 @@ test("@auth verifica email e recupero password via SMTP reale", async ({
     process.env.E2E_AUTH !== "1" || process.env.E2E_MAILPIT !== "1",
     "Richiede API, PostgreSQL e Mailpit reali; E2E_MAILPIT=1.",
   );
+  test.setTimeout(150000);
   const origin = baseURL!;
   const a = await register(context.request, origin, "mail");
   const oldSession = await browser.newContext({ baseURL: origin });
@@ -258,7 +263,9 @@ test("@auth verifica email e recupero password via SMTP reale", async ({
     await page.goto("/login");
     await page.getByLabel("Email", { exact: true }).fill(a.email);
     await page.getByLabel("Password", { exact: true }).fill(replacement);
-    await page.getByRole("button", { name: "Accedi", exact: true }).click();
+    await submitAuth(page, "login", () =>
+      page.getByRole("button", { name: "Accedi", exact: true }).click(),
+    );
     await expect(page).toHaveURL("/");
     await expect(page.getByTestId("session-name")).toHaveText(a.display_name);
     await page.goto("/settings/profile");

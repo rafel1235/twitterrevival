@@ -17,6 +17,7 @@ import (
 	"radura.local/api/internal/auth"
 	"radura.local/api/internal/httpapi"
 	"radura.local/api/internal/mailer"
+	"radura.local/api/internal/posts"
 	"radura.local/api/internal/users"
 	"radura.local/api/migrations"
 )
@@ -104,7 +105,8 @@ func run() error {
 	}
 	accounts := auth.NewAccountService(&auth.PostgresRepository{Pool: pool}, service, sender, origin)
 	profiles := users.NewService(&users.Repository{Pool: pool})
-	handler, err := httpapi.New(service, httpapi.Config{Origin: origin, CookieSecure: secure, SessionTTL: duration}, healthy, httpapi.WithUsers(profiles), httpapi.WithAccounts(accounts))
+	postService := posts.NewService(&posts.Repository{Pool: pool})
+	handler, err := httpapi.New(service, httpapi.Config{Origin: origin, CookieSecure: secure, SessionTTL: duration}, healthy, httpapi.WithUsers(profiles), httpapi.WithAccounts(accounts), httpapi.WithPosts(postService))
 	if err != nil {
 		return err
 	}

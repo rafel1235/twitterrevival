@@ -8,6 +8,7 @@ import type { Profile } from "@/lib/profile";
 import { useSession } from "@/components/auth/session-provider";
 import { SessionGate, PageError, UserAvatar } from "./shared";
 import { ConnectionList } from "./connections";
+import { PostList } from "@/components/posts/post-list";
 import styles from "./profile.module.css";
 
 export function ProfileView({
@@ -211,7 +212,7 @@ function ProfileContent({
       </section>
       <nav className={styles.tabs} aria-label="Sezioni profilo">
         <Link href={base} aria-current={!kind ? "page" : undefined}>
-          Profilo
+          Post
         </Link>
         <Link
           href={`${base}/followers`}
@@ -237,13 +238,12 @@ function ProfileContent({
           }
         />
       ) : (
-        <section className={styles.state}>
-          <h3>Qui cresceranno le conversazioni.</h3>
-          <p>
-            Il profilo e le connessioni sono reali. I post saranno disponibili
-            in Sprint 3.
-          </p>
-        </section>
+        <PostList
+          key={profile.id}
+          path={`/users/${profile.id}/posts`}
+          empty="Ancora nessun post visibile."
+          label={`Post di @${profile.handle}`}
+        />
       )}
     </>
   );

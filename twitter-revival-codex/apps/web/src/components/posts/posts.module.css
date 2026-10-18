@@ -1,0 +1,174 @@
+.state {
+  padding: 28px 24px;
+  text-align: center;
+  color: var(--color-muted);
+  font-size: 14px;
+}
+.composer {
+  border-bottom: 1px solid var(--color-border);
+}
+.composer textarea {
+  min-height: 74px;
+  max-height: 320px;
+  resize: vertical;
+  overflow-wrap: anywhere;
+}
+.composerActions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.context {
+  color: var(--color-muted);
+  font-size: 12px;
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+}
+.context a:hover,
+.meta a:hover,
+.reposted a:hover {
+  text-decoration: underline;
+}
+.card {
+  overflow-wrap: anywhere;
+  padding-bottom: 16px;
+}
+.meta {
+  row-gap: 3px;
+}
+.bodyLink {
+  display: block;
+}
+.bodyLink:hover {
+  color: var(--color-primary);
+}
+.quote,
+.parent {
+  display: block;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  margin-top: 12px;
+  background: #fafcf9;
+}
+.quote:hover,
+.parent:hover {
+  background: var(--color-tint);
+}
+.quote .context {
+  margin: 0;
+}
+.quote :global(.post-text) {
+  font-size: 13px;
+}
+.unavailable {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 14px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--color-muted);
+}
+.actions {
+  gap: 3px;
+  margin-right: 0;
+  flex-wrap: wrap;
+}
+.actions a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--color-muted);
+  padding: 8px;
+  border-radius: 18px;
+}
+.actions button {
+  border-radius: 18px;
+  gap: 8px;
+}
+.actions button:hover,
+.actions a:hover {
+  background: var(--color-tint);
+  color: var(--color-primary);
+}
+.actions button[aria-pressed="true"] {
+  color: var(--color-primary);
+  font-weight: 700;
+  background: var(--color-tint);
+}
+.ownActions {
+  display: flex;
+  gap: 20px;
+  padding: 3px 0 4px;
+}
+.confirm {
+  background: #fff5eb;
+  padding: 15px;
+  border-radius: 12px;
+  font-size: 13px;
+}
+.confirm p {
+  margin-bottom: 12px;
+}
+.confirm button {
+  margin: 4px 10px 4px 0;
+}
+.card :global(.composer) {
+  padding: 16px 0;
+}
+.card :global(.composer) > span {
+  display: none;
+}
+.reposted {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--color-muted);
+  font-size: 11px;
+  padding: 13px 24px 0 80px;
+  overflow-wrap: anywhere;
+}
+.reposted + .card {
+  padding-top: 9px;
+}
+.listHeading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--color-border);
+}
+.parentContext {
+  padding: 0 24px 18px;
+  border-bottom: 1px solid var(--color-border);
+}
+.replyComposer {
+  scroll-margin-top: 12px;
+}
+.replyComposer h2 {
+  font-size: 15px;
+  padding: 20px 24px 0;
+}
+.detail :global(.post-text) {
+  font-size: 17px;
+}
+@media (max-width: 600px) {
+  .state {
+    padding: 24px 18px;
+  }
+  .reposted {
+    padding-left: 64px;
+  }
+  .parentContext {
+    padding: 0 16px 16px;
+  }
+  .listHeading {
+    padding: 10px 16px;
+  }
+  .actions button,
+  .actions a {
+    padding: 8px 6px;
+    gap: 5px;
+  }
+}

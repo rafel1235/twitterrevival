@@ -1,78 +1,83 @@
-# Stato implementazione · 17 ottobre 2026
+# Stato implementazione · 18 ottobre 2026
 
-**Sprint 2 implementato e verificato contro PostgreSQL, API, frontend e SMTP locali reali.** Lo Sprint 1 resta funzionante. Il feed è ancora demo e il composer disabilitato: nessuna funzione dello Sprint 3 è stata anticipata. Il resoconto precedente è conservato in [implementation-status-sprint-1.md](implementation-status-sprint-1.md).
+**Sprint 3 completato e verificato localmente: post, risposte, like, repost, citazioni e timeline cronologica con PostgreSQL reale.** Lo stack aggiornato è attivo in Docker. Gli sprint precedenti restano funzionanti; resoconti conservati in [Sprint 1](implementation-status-sprint-1.md) e [Sprint 2](implementation-status-sprint-2.md). Nessuna funzione Sprint 4–6 implementata.
 
-## Preservazione del lavoro
+## Stato iniziale e preservazione
 
-`AGENTS.md`, `PROJECT_SPEC.md` e `CODEX_START_PROMPT.md` sono stati letti e lasciati invariati. Il repository Git effettivo è nella cartella contenitore `twitter revival`; nessun cambiamento a indice, branch, cronologia o configurazione globale, nessun commit o push.
+Letti interamente `AGENTS.md` e `PROJECT_SPEC.md`; lasciati invariati insieme a `CODEX_START_PROMPT.md`. Git iniziale pulito sul ramo `main`, nella cartella contenitore `twitter revival`. Nessuna modifica a indice, branch, cronologia o configurazione Git; nessun commit, push o deploy.
 
-Prima dell'upgrade è stato creato un backup PostgreSQL custom in `.local/backups/before-sprint2.dump` (10.258 byte). La migrazione 002 conserva utenti, profili e sessioni preesistenti; volume Docker ed `.env` locale non sono stati azzerati o sovrascritti. I test usano il database separato `radura_test` e schemi isolati. `.env`, backup, tool, cache e artifact di test sono esclusi da Git.
+Prima della migrazione è stato salvato un backup PostgreSQL custom in `.local/backups/before-sprint3.dump` (**27.939 byte**). Database, volume Compose, `.env`, account, sessioni e grafo sociale preesistenti sono stati conservati. I test Go distruttivi usano schemi isolati nel database separato `radura_test`. I test browser creano account e contenuti di prova nel database locale del sito; non sono dati di persone reali. Segreti, backup, tool e artifact restano esclusi da Git.
 
-## Attività completate e file principali
+## File e attività completate
 
-| Area                | Implementazione                                                                                                      | File principali                                                                                                                                                           |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Schema              | Avatar placeholder, follows, blocks, token account; FK, vincoli, indici e divieto di relazioni con sé stessi         | `services/api/migrations/002_identity_social.{up,down}.sql`                                                                                                               |
-| Migrazioni          | Catalogo sequenziale, lock transazionale, rifiuto versioni sconosciute, rollback di una sola versione                | `services/api/migrations/migrate.go`, `services/api/sqlc.yaml`                                                                                                            |
-| Profili e grafo     | Modifica del proprio profilo, follow/unfollow, block/unblock, contatori e liste a cursore filtrati per visibilità    | `services/api/internal/users/`, `internal/httpapi/users.go`, `db/queries/users.sql`, `internal/db/users.sql.go`                                                           |
-| Sicurezza account   | Verifica email, recupero password, token hashati monouso, scadenza, cooldown, revoca di tutte le sessioni dopo reset | `services/api/internal/auth/accounts_{service,repository}.go`, `internal/httpapi/accounts.go`, `db/queries/account_tokens.sql`, `internal/db/account_tokens.sql.go`       |
-| SMTP                | Worker interno limitato, timeout, STARTTLS e verifica certificato, invio locale a Mailpit                            | `services/api/internal/mailer/`, `cmd/server/main.go`, `compose.yaml`, `.env.example`                                                                                     |
-| Frontend            | Profilo, editor, persone per handle esatto, connessioni, blocchi, verifica email e reset password collegati alle API | `apps/web/src/app/u/`, `app/settings/`, `app/people/`, `app/{verify-email,forgot-password,reset-password}/`, `components/profile/`, `components/auth/account-actions.tsx` |
-| Sessione e UI       | Aggiornamento nome/avatar, gestione sessione scaduta e risposte obsolete dopo logout/reset, layout responsive        | `components/auth/session-provider.tsx`, `components/layout/app-shell.tsx`, `src/lib/{api,profile,use-resource}.ts`, `src/app/globals.css`                                 |
-| Test                | Integrazione PostgreSQL, concorrenza, SMTP, validazione, browser reali nelle tre viewport                            | `services/api/internal/httpapi/sprint2_integration_test.go`, `internal/users/service_test.go`, `internal/mailer/smtp_test.go`, `apps/web/tests/identity.spec.ts`          |
-| CI e documentazione | Workflow con PostgreSQL e Mailpit; setup, contratti API, politiche e provenienza UI                                  | `.github/workflows/ci.yml`, `README.md`, `docs/architecture/sprint-2.md`, `docs/reverse-engineering/sprint-2-matrix.md`                                                   |
+| Area                | File principali                                                                                                 | Risultato                                                                                           |
+| ------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Database            | `services/api/migrations/003_posts.{up,down}.sql`, `migrate.go`, `sqlc.yaml`                                    | posts/likes/reposts, vincoli, FK, indici, view di visibilità; schema versione 3                     |
+| Query               | `services/api/db/queries/posts.sql`, `internal/db/posts.sql.go`, `internal/db/models.go`                        | SQL parametrizzato, generazione sqlc eseguita e usata dai repository                                |
+| Modulo post         | `services/api/internal/posts/{service,repository,service_test}.go`                                              | Validazione Unicode, CRUD, interazioni idempotenti, feed/risposte/profilo, incorporamenti filtrati  |
+| HTTP                | `services/api/internal/httpapi/{posts,server}.go`, `cmd/server/main.go`                                         | Route reali, autorizzazioni, origin/CSRF, rate limit, JSON coerente e status appropriati            |
+| Integrazione        | `services/api/internal/httpapi/sprint3_integration_test.go`, fixture Sprint 2 aggiornata                        | Vincoli, CRUD, cursori, blocchi, sospensioni, concorrenza, upgrade/rollback                         |
+| UI                  | `apps/web/src/components/posts/`, `src/lib/posts.ts`, `src/app/posts/[id]/page.tsx`                             | Composer, card, feed, dettaglio conversazione, risposte e citazioni; loading/empty/error/retry      |
+| Integrazione UI     | `components/{timeline/timeline,profile/profile-view,layout/app-shell}.tsx`                                      | Home autenticata e profili con contenuti reali; demo solo anonima                                   |
+| Browser             | `apps/web/tests/posts.spec.ts`, `helpers.ts`, test auth/identità aggiornati                                     | Flussi reali nelle tre viewport, helper che rispettano 429/Retry-After senza disattivare il limiter |
+| CI e documentazione | Workflow interno e `../.github/workflows/radura-ci.yml`, README, architettura/matrice Sprint 3, questo registro | Pipeline estesa alla suite completa, contratti API e politiche documentati                          |
 
-I percorsi abbreviati nella tabella sono relativi alla rispettiva applicazione. Anche il codice sqlc dei modelli e dell'autenticazione è stato rigenerato. Il workflow effettivamente scoperto da GitHub nel repository attuale è `../.github/workflows/radura-ci.yml`, con working directory e percorsi adattati alla sottocartella; il template interno resta utilizzabile quando il monorepo è pubblicato come root.
+Non sono state aggiunte dipendenze npm/Go o nuovi servizi. Restano Next.js App Router/React/TypeScript, monolite Go/Chi/pgx/sqlc, PostgreSQL e Mailpit locale. Nessun asset proprietario, scraping o affiliazione suggerita; brand originale Radura.
 
-## Endpoint nuovi funzionanti
+## Endpoint funzionanti aggiunti
 
-- `GET /api/v1/users/{handle}` e `PATCH /api/v1/users/me`.
-- `POST` / `DELETE /api/v1/users/{id}/follow`.
-- `POST` / `DELETE /api/v1/users/{id}/block`.
-- `GET /api/v1/users/{id}/followers`, `GET /api/v1/users/{id}/following`, `GET /api/v1/users/me/blocks`.
-- `POST /api/v1/auth/verification/request` e `POST /api/v1/auth/verification/confirm`.
-- `POST /api/v1/auth/password/forgot` e `POST /api/v1/auth/password/reset`.
+- `POST /api/v1/posts` → 201 con card e Location; `{body, reply_to_id?, quote_of_id?}`.
+- `GET /api/v1/posts/{id}` → 200 con card visibile.
+- `PATCH /api/v1/posts/{id}` → 200, solo testo del proprio post.
+- `DELETE /api/v1/posts/{id}` → 204, soft delete ripetibile dal proprietario.
+- `POST` / `DELETE /api/v1/posts/{id}/likes` → 200 con card aggiornata, idempotenti.
+- `POST` / `DELETE /api/v1/posts/{id}/reposts` → 200 con card aggiornata, idempotenti.
+- `GET /api/v1/posts/{id}/replies` → risposte dirette paginate.
+- `GET /api/v1/feed/home` → post propri e dei seguiti più repost.
+- `GET /api/v1/users/{id}/posts` → post e repost del profilo visibile.
 
-Restano verificati `/healthz`, registrazione, login, logout e `/auth/me`. Profili ed elenchi richiedono una sessione. Il DTO pubblico non contiene email, password o token; l'attore delle mutazioni deriva sempre dal cookie. Nome massimo 50 code point, bio 160, località 100; URL solo HTTP/HTTPS senza credenziali, avatar a iniziali in quattro palette originali. Handle/email e upload non rientrano in questo incremento.
+Sessione obbligatoria anche in lettura; 401 anonimo, 422 input/UUID/cursore non valido, 403 modifica/eliminazione di un post altrui visibile, 404 assente/cancellato/bloccato/inattivo. Mutazioni JSON con origin esatto, Fetch Metadata e header CSRF; massimo 8 KiB. Quota separata 90 scritture post/minuto per peer, con 429/Retry-After; protezioni auth/social/email precedenti mantenute.
 
-Un blocco elimina entrambi i follow nella stessa transazione e impedisce di ricrearli. Profilo ed elenchi diventano indisponibili in entrambe le direzioni; lo sblocco rimuove solo il blocco posseduto e non ripristina follow. Un lock PostgreSQL per coppia serializza le mutazioni concorrenti. Le liste hanno paginazione stabile per timestamp/UUID e riapplicano i controlli di visibilità.
+## Comportamenti e scelte verificate
 
-I token email/reset sono casuali a 32 byte, nel DB solo SHA-256, con tipo e uso singolo. Scadono rispettivamente dopo 24 ore e 1 ora. Il recupero risponde con lo stesso `202` per account esistenti e inesistenti; il percorso HTTP accoda senza consultare l'account. I GET dei link non consumano token. Il reset aggiorna Argon2id e revoca tutte le sessioni atomicamente; un login concorrente non può creare una nuova sessione usando un hash precedente al reset. Mutazioni protette da origin esatto, Fetch Metadata, header CSRF, validazione JSON e limiti di frequenza.
+Testo da 1 a 280 code point Unicode dopo trim coerente client/server, incluse differenze NEL/BOM. Emoji e accenti combinati contano per code point, non unità UTF-16. Nessun HTML interpretato. Modifica solo del testo proprio, indicatore “Modificato”, nessuno spostamento nel feed; riferimenti immutabili. Risposta e citazione sono alternative e richiedono testo proprio.
+
+Originali e repost sono eventi distinti ordinati per data e UUID discendenti, senza ranking. Cursore Base64URL, limite default 20/max 50; card e riferimenti di un solo livello caricati in batch con snapshot coerente per richiesta. Blocchi e account inattivi filtrano autore, reposter, contatori e incorporamenti; un originale non disponibile è oscurato senza rivelarne nome/testo. Le risposte/citazioni di altri autori visibili restano contenuti indipendenti. Mutazioni serializzate con lo stesso lock per coppia del grafo sociale, poi lock del post e nuovo controllo di visibilità.
 
 ## Verifiche realmente eseguite
 
-| Verifica                                                                                | Esito                                                                                                                                         |
-| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sqlc generate` e `gofmt`                                                               | PASS; query generate usate realmente, nessun file Go da formattare                                                                            |
-| `go vet ./...`                                                                          | PASS                                                                                                                                          |
-| `TEST_DATABASE_URL=… go test -count=1 -v ./...`                                         | **PASS: 17 test principali e 9 sotto-casi Origin/CSRF; nessuno skip**, PostgreSQL reale                                                       |
-| `go build`                                                                              | PASS; binario locale e immagine API compilati                                                                                                 |
-| `npm run format:check`, `npm run lint`, `npm run typecheck`                             | PASS; zero warning/errori ESLint                                                                                                              |
-| `npm run build`                                                                         | PASS; build Next.js e verifica TypeScript, route profili dinamiche incluse                                                                    |
-| `docker compose config --quiet`                                                         | PASS                                                                                                                                          |
-| `docker compose up --build -d --wait`                                                   | PASS; **db, api, web e mailpit healthy**, migrazione **Exited (0)**                                                                           |
-| Schema e healthcheck                                                                    | Versione DB **2**; `/api -healthcheck` exit 0                                                                                                 |
-| `PLAYWRIGHT_BASE_URL=http://localhost:3000 E2E_AUTH=1 E2E_MAILPIT=1 npm run test:smoke` | **18/18 PASS, nessuno skip, 32,0 secondi**, contro i container reali                                                                          |
-| UI e form                                                                               | Desktop 1440×900, tablet 768×1024 e mobile 390×844; screenshot ispezionati, nessun overflow anche con nome di 50 caratteri e bio di 160 emoji |
+| Verifica                                                                                | Esito effettivo                                                                                                                                              |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `sqlc generate`, `gofmt`                                                                | PASS; generazione tipizzata e formattazione Go                                                                                                               |
+| `go vet ./...`                                                                          | PASS                                                                                                                                                         |
+| `TEST_DATABASE_URL=… go test -count=1 -v ./...`                                         | **22 test principali PASS + 22 sotto-casi (9 Origin/CSRF, 13 Unicode), nessuno skip**, PostgreSQL reale                                                      |
+| `go build -o … ./cmd/server`                                                            | PASS, binario locale; compilazione API riuscita anche in Docker                                                                                              |
+| `npm run format:check`, `npm run lint`, `npm run typecheck`                             | PASS, zero warning/errori ESLint                                                                                                                             |
+| `npm run build`                                                                         | PASS nativo; build finale aggiornato riuscito in Docker con route dinamica `/posts/[id]`                                                                     |
+| `docker compose config --quiet`                                                         | PASS                                                                                                                                                         |
+| `docker compose up --build -d --wait --wait-timeout 180`                                | PASS; **db, api, web e mailpit healthy**, migrate **Exited (0)**                                                                                             |
+| Healthcheck e schema                                                                    | `/api -healthcheck` exit 0; versione applicativa PostgreSQL **3**                                                                                            |
+| `PLAYWRIGHT_BASE_URL=http://localhost:3000 E2E_AUTH=1 E2E_MAILPIT=1 npm run test:smoke` | **24/24 PASS, nessuno skip, 1,0 minuto**; ultimo test rispetta il Retry-After della API                                                                      |
+| UI                                                                                      | Desktop 1440×900, tablet 768×1024, mobile 390×844; screenshot conversazione/timeline, assenza di overflow verificata, desktop/mobile ispezionati visivamente |
 
-I test verificano persistenza del profilo dopo reload, autorizzazione alla sola modifica propria, assenza di dati privati, URL non sicuri, idempotenza delle relazioni, cursori, blocco reciproco, account sospesi e 12 round di follow/block concorrenti. Verificano inoltre token hashati, scadenza, tipo errato, replay, consumo concorrente con un solo successo, recupero non enumerabile, revoca sessioni e rifiuto di login con hash obsoleto. Il downgrade della sola 002 e il successivo upgrade conservano utenti/sessioni; una versione futura sconosciuta viene rifiutata.
+I nuovi test Go coprono pubblicazione/modifica/eliminazione, autorizzazioni e CSRF, 280/281 emoji, accenti combinati, NEL/BOM, FK/check SQL, like/repost ripetuti, contatori, risposte/citazioni e riferimenti oscurati. Coprono feed fuori grafo e repost consentiti, ordinamento a timestamp uguali, inserimenti fra pagine senza duplicati, blocchi in entrambi i versi, sospensioni, 8 like concorrenti, 8 round risposta/blocco e repost/cancellazione concorrenti. Il rollback della sola 003 conserva account/sessioni/profili; l'upgrade riparte correttamente.
 
-Playwright mantiene la regressione auth dello Sprint 1 e aggiunge profili, follow/unfollow, block/unblock, verifica email e recupero password via SMTP reale catturato da Mailpit. Nessuna intercettazione/mock delle API. Report e screenshot sono in `playwright-report/` e `test-results/`, ignorati da Git. Corretto durante la verifica il ritorno a capo dei nomi lunghi; la suite finale è stata ripetuta con gli input massimi.
+Playwright verifica il ciclo completo via UI nelle tre viewport, persistenza dopo refresh, Unicode, HTML mostrato come testo, feed dopo follow, like/repost, risposte/citazioni, blocco e cancellazione. La viewport desktop verifica inoltre il caricamento oltre 20 eventi senza duplicati. Auth, profili, follow/blocchi e verifica/reset SMTP dello Sprint 2 restano nella suite. Nessun mock o intercettazione delle API. Report e screenshot in `playwright-report/` e `test-results/`, ignorati da Git.
 
-Ambiente: Windows/PowerShell, Node 24.18.0, npm 11.16.0, Next 16.4.2, React 19.3.1, TypeScript 5.9.3, Go 1.27.2, Chi 5.5.0, pgx 5.11.0, sqlc 1.31.1, PostgreSQL 18.4, Docker Engine 29.8.2, Compose 5.6.0, Mailpit 1.31.6. Nessuna nuova dipendenza npm/Go; Go/sqlc portabili sotto `.local/` e PATH Docker impostato solo per i processi di verifica.
+Iterazioni risolte: reso esplicito il cast SQL dei riferimenti per sqlc; corretto un aggiornamento di stato segnalato dal lint nel caricamento della lista; uniformato il trim Unicode Go/JavaScript. Il primo run browser completo ha passato 23/24 test, incontrando la quota auth condivisa nell'ultimo login: gli helper ora attendono il Retry-After delle sole risposte 429, senza ridurre la protezione. Il run completo finale è passato. L'avvio Chromium/Docker richiede esecuzione fuori dal sandbox Windows; una prima prova browser ha restituito EPERM, poi è stata rieseguita con esito positivo.
 
-## Limiti e attività non eseguite
+Ambiente invariato dallo Sprint 2: Windows/PowerShell, Node 24.18.0/npm 11.16.0, Next 16.4.2/React 19.3.1/TypeScript 5.9.3, Go 1.27.2, sqlc 1.31.1, PostgreSQL 18.4, Docker Engine 29.8.2/Compose 5.6.0, Mailpit 1.31.6. Lockfile conservati.
 
-- **Nessun post reale o altra funzione Sprint 3–6.** Home etichettata demo, composer disabilitato. Ricerca disponibile soltanto per handle esatto.
-- Mailpit cattura email soltanto in locale. Nessun invio Internet, account esterno, servizio a pagamento o deploy. Un relay reale richiederà configurazione SMTP/TLS.
-- Coda email in memoria, massimo 32 richieste e un worker: non è durevole. Un riavvio può perdere richieste pendenti; richiedere un nuovo link dopo il cooldown di un minuto per utente/tipo. Retry durevoli e retention da completare prima della beta.
-- La verifica email è disponibile ma non obbligatoria per login/follow nell'anteprima locale.
-- Limiti per peer condivisi dietro Next: auth 30/minuto, mutazioni sociali 60/minuto, operazioni email 10/minuto. Nessun affidamento su forwarded IP; massimo quattro operazioni Argon2 concorrenti. Da rivedere prima dell'uso pubblico.
-- Pulizia di sessioni e token consumati/scaduti da definire prima della beta. Nessun cambio handle/email o upload avatar.
-- **GitHub Actions remota non eseguita.** Race detector configurato nella CI Linux, non eseguito nel run Windows. Nessun push, commit o pubblicazione.
+## Limiti e prossimi passi
 
-## Uso locale e prossimo passo
+- Solo testo e visibilità public, con letture autenticate. Nessun upload, ricerca per parole chiave, notifiche, DM, federazione, moderazione o deploy.
+- Nessun realtime: “Aggiorna” o refresh per azioni da altre sessioni. Una propria mutazione ricarica la prima pagina e non conserva le pagine aggiuntive aperte.
+- Soft delete conserva il corpo nel DB e nei backup; niente revisioni, ripristino o policy definitiva di retention. Cancellazione/esportazione GDPR restano da implementare.
+- I blocchi filtrano le righe storiche like/repost senza eliminarle: possono riapparire dopo sblocco. I follow rimossi non vengono ripristinati.
+- Nessun load test; query di contatori e fan-out in lettura da misurare prima della beta. Quote per peer condivise dietro Next, non distribuite.
+- Restano i limiti email dello Sprint 2: Mailpit solo locale, coda in memoria non durevole, verifica email non obbligatoria nell'anteprima. Retry durevoli e cleanup di token/sessioni ancora da completare.
+- **CI GitHub Actions remota e race detector Linux non eseguiti.** Pipeline configurata; nessun push o pubblicazione.
 
-Servizi lasciati attivi: applicazione <http://localhost:3000>, modifica profilo <http://localhost:3000/settings/profile>, persone <http://localhost:3000/people>, casella email di sviluppo <http://localhost:8025>. Creare un account o usare quello locale esistente; aprire in Mailpit il link di verifica o recupero, poi confermare dal form.
+Aprire <http://localhost:3000>, accedere con l'account locale, seguire un altro account e pubblicare. Casella email locale: <http://localhost:8025>. Servizi lasciati attivi. Dalla cartella del progetto: `docker compose up --build -d --wait` per ricompilare/avviare, `docker compose stop` per fermare conservando i dati; non sovrascrivere `.env`.
 
-Dalla cartella con `compose.yaml`: `docker compose up -d --wait` per riavviare, `docker compose stop` per arrestare conservando i dati. Non sovrascrivere `.env`; setup completo e comandi test nel README. Il prossimo incremento è lo **Sprint 3**, da aprire su richiesta, partendo dal backend dei post e sostituendo solo allora la demo.
+Il prossimo incremento è **Sprint 4: media, ricerca e notifiche**, da iniziare su richiesta. Setup ed elenco completo delle API nel README; politiche in [architettura Sprint 3](architecture/sprint-3.md), provenienza/stati UI nella [matrice Sprint 3](reverse-engineering/sprint-3-matrix.md).
